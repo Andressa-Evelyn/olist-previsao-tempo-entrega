@@ -1,4 +1,4 @@
-# 1. Definição do Problema (Peso 10%)
+#Definição do Problema 
 
 > Projeto: Previsão do tempo de entrega de pedidos — Olist
 > Dataset: Brazilian E-Commerce Public Dataset by Olist (Kaggle)
@@ -10,9 +10,9 @@ explicitamente onde cada requisito pedido no enunciado é atendido.
 
 ---
 
-## Slide 1 — O que é a Olist
+## O que é a Olist
 
-**Bullets para o slide:**
+**Bullets:**
 - Olist é uma **startup brasileira de marketplace** (fundada em 2015, sede em
   Curitiba/PR).
 - Ela **não vende produtos próprios**: conecta pequenos e médios lojistas de
@@ -25,15 +25,6 @@ explicitamente onde cada requisito pedido no enunciado é atendido.
   em múltiplos marketplaces, com informações de status do pedido, preço,
   pagamento, frete, avaliação do cliente e localização geográfica de
   clientes e vendedores.
-
-**Fala sugerida:**
-"A Olist é uma espécie de 'operadora logística e comercial' para pequenos
-lojistas brasileiros: ela não tem produto próprio, ela dá a esses lojistas
-acesso aos grandes marketplaces e cuida de todo o processo entre a compra e
-a entrega. Como ela está no meio dessa cadeia — entre o vendedor, a
-transportadora e o cliente — ela carrega a responsabilidade (e o risco) de
-cumprir o prazo prometido ao cliente, mesmo não controlando diretamente
-quem fabrica ou quem transporta o produto."
 
 ---
 
@@ -65,16 +56,9 @@ quem fabrica ou quem transporta o produto."
   útil na EDA para entender atrasos, mas **o alvo do modelo é o tempo de
   entrega em si**, conforme pedido no enunciado.
 
-**Fala sugerida:**
-"Definimos que cada linha do nosso dataset final representa um pedido
-entregue. A variável que queremos prever — o nosso 'y' — é quantos dias se
-passam entre a compra e a entrega na casa do cliente. É uma regressão
-porque esse número pode assumir qualquer valor contínuo, diferente de, por
-exemplo, prever se o pedido vai atrasar ou não, que seria classificação."
-
 ---
 
-## Slide 3 — Estrutura do dataset e tabelas utilizadas
+## Estrutura do dataset e tabelas utilizadas
 
 O dataset é composto por **9 tabelas relacionais**, conectadas por chaves
 como `order_id`, `customer_id`, `product_id`, `seller_id` e código postal
@@ -103,19 +87,9 @@ orders (order_id) ──< order_items >── products (product_id)
    └── order_reviews (order_id)   [somente para EDA — não entra como feature]
 ```
 
-**Fala sugerida:**
-"O dataset é dividido em 9 tabelas que se conectam como um banco relacional.
-A tabela `orders` é o centro de tudo, porque é dela que vem o nosso alvo.
-As demais tabelas entram para enriquecer o pedido com informações de
-distância geográfica, características do produto, forma de pagamento e
-quantidade de itens — tudo que pode influenciar quanto tempo uma entrega
-demora. A tabela de reviews nós deixamos de fora do modelo preditivo porque
-ela só existe depois que o pedido já foi entregue — usá-la como feature
-seria vazamento de informação do futuro."
-
 ---
 
-## Slide 4 — Desafio real e impacto para a Olist
+## Desafio real e impacto para a Olist
 
 **O desafio:**
 - A Olist **não controla diretamente a logística de ponta a ponta**: depende
@@ -139,23 +113,3 @@ seria vazamento de informação do futuro."
   precisa e confiável (nem otimista demais, nem exageradamente conservadora)
   é diferencial frente a outros marketplaces.
 
-**Fala sugerida:**
-"O grande desafio aqui é que a Olist é uma intermediária: ela promete um
-prazo de entrega sem controlar totalmente nem quem despacha, nem quem
-transporta o produto. Isso faz o tempo de entrega variar bastante de pedido
-para pedido. Prever esse prazo com mais precisão tem impacto direto na
-satisfação do cliente — que é o que vemos nas notas de avaliação — e também
-na forma como a empresa planeja sua operação logística."
-
----
-
-## Checklist — onde cada requisito do enunciado é atendido
-
-| Requisito do enunciado | Onde está neste documento |
-|---|---|
-| Apresentar o contexto da empresa Olist | **Slide 1** — modelo de negócio, o que é a Olist, escopo do dataset |
-| Descrever claramente o problema de regressão (o que é cada amostra, qual a variável alvo) | **Slide 2** — amostra = pedido entregue; alvo = `order_delivered_customer_date − order_purchase_timestamp` (dias) |
-| Identificar as principais tabelas utilizadas e justificar a escolha | **Slide 3** — tabela com as 9 tabelas, papel de cada uma e justificativa, + diagrama de relacionamento |
-| Apontar o desafio real representado pelo problema e seu impacto | **Slide 4** — variância logística, falta de controle ponta a ponta, impacto em CX e operação |
-
-Todos os 4 itens obrigatórios (★) estão contemplados.
