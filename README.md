@@ -1,9 +1,3 @@
-# olist-previsao-tempo-entrega
-
-Projeto 2 da disciplina **T326 - Ciência dos Dados** (Unifor, turma 16/17,
-Prof. Caio Ponte): pipeline de Aprendizado de Máquina para prever o **tempo
-de entrega de pedidos** da Olist a partir das características do pedido.
-
 ## Objetivo
 
 Prever, em dias, quanto tempo levará para um pedido chegar à casa do
@@ -39,14 +33,3 @@ reproduzir o projeto localmente:
 └── src/                          # código do pipeline (pré-processamento, treino, avaliação)
 ```
 
-## Equipe
-
-Mesma equipe do Projeto 1.
-
-## Etapas do trabalho
-
-- [x] 1. Definição do Problema
-- [ ] 2. Pré-processamento dos Dados
-- [ ] 3. Análise Exploratória dos Dados (EDA)
-- [ ] 4. Treinamento do Modelo
-- [ ] 5. Avaliação do Modelo e Conclusão
