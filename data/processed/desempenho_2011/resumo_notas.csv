@@ -1,4 +1,0 @@
-ano,variavel,componente,n,peso_total,media,desvio_padrao,minimo,q1,mediana,q3,maximo
-2011,NT_GER,Nota geral,49,49.0,45.183673469387756,13.90339207619816,0.0,36.5,46.2,54.0,73.2
-2011,NT_FG,Formação geral,49,49.0,51.86734693877551,17.69232870195326,0.0,40.0,50.0,67.5,82.0
-2011,NT_CE,Componente específico,49,49.0,42.93877551020408,15.477292726315364,0.0,32.3,42.5,52.9,73.8
