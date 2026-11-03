@@ -1,0 +1,28 @@
+feature,tratamento,descricao,pct_faltantes
+preco_total,numérica (log1p + StandardScaler),Soma dos preços dos itens do pedido (R$),0.0
+frete_total,numérica (log1p + StandardScaler),Soma do frete dos itens do pedido (R$),0.0
+peso_total_g,numérica (log1p + StandardScaler),Soma do peso dos produtos (g),0.02
+volume_total_cm3,numérica (log1p + StandardScaler),Soma do volume (comp x alt x larg) dos produtos (cm³),0.02
+distancia_media_km,numérica (log1p + StandardScaler),Distância haversine média vendedor→cliente (km),0.49
+distancia_max_km,numérica (log1p + StandardScaler),Maior distância vendedor→cliente entre os itens (km),0.49
+razao_frete_preco,numérica (log1p + StandardScaler),frete_total / preco_total,0.0
+n_itens,numérica (RobustScaler),Quantidade de itens no pedido,0.0
+n_produtos,numérica (RobustScaler),Quantidade de produtos distintos,0.0
+n_vendedores,numérica (RobustScaler),Quantidade de vendedores distintos,0.0
+prazo_estimado_dias,numérica (RobustScaler),"Prazo prometido no checkout (estimada − compra), em dias",0.0
+prazo_postagem_dias,numérica (RobustScaler),"Prazo limite de postagem do vendedor (shipping_limit − compra), em dias",0.0
+parcelas_max,numérica (RobustScaler),Maior número de parcelas do pagamento,0.0
+compra_hora,numérica (RobustScaler),Hora da compra (0–23),0.0
+cliente_lat,numérica (RobustScaler),Latitude do cliente (mediana do prefixo de CEP),0.27
+cliente_lng,numérica (RobustScaler),Longitude do cliente (mediana do prefixo de CEP),0.27
+vendedor_lat,numérica (RobustScaler),Latitude do vendedor principal,0.22
+vendedor_lng,numérica (RobustScaler),Longitude do vendedor principal,0.22
+mesmo_estado,binária (passthrough),1 se vendedor principal e cliente estão no mesmo estado,0.0
+compra_fim_semana,binária (passthrough),1 se a compra foi em sábado/domingo,0.0
+sem_info_produto,binária (passthrough),1 se peso/dimensões do produto estavam ausentes (antes da imputação),0.0
+cliente_estado,categórica (OneHotEncoder),UF do cliente,0.0
+vendedor_estado,categórica (OneHotEncoder),UF do vendedor principal,0.0
+tipo_pagamento,categórica (OneHotEncoder),Forma de pagamento predominante,0.0
+compra_dia_semana,categórica (OneHotEncoder),Dia da semana da compra (0=seg … 6=dom),0.0
+compra_mes,categórica (OneHotEncoder),Mês da compra (1–12),0.0
+categoria_produto,categórica (TargetEncoder),Categoria do item de maior valor do pedido,0.0
