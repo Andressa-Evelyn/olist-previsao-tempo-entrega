@@ -114,17 +114,78 @@ como serão comparados no Tópico 4, o mesmo conjunto serve para todos.
 ## Resumo das features selecionadas
 
 27 features de entrada → **65 colunas** após a codificação (treino: 76.080 linhas;
-teste: 19.020 linhas; 0 valores faltantes restantes).
+teste: 19.020 linhas; 0 valores faltantes restantes). A coluna **Tratamento** indica
+o que é aplicado a cada feature depois de criada.
 
-| Grupo | Qtde | Features |
-|---|---|---|
-| Numérica (log1p + Standard) | 7 | preco_total, frete_total, peso_total_g, volume_total_cm3, distancia_media_km, distancia_max_km, razao_frete_preco |
-| Numérica (Robust) | 11 | n_itens, n_produtos, n_vendedores, prazo_estimado_dias, prazo_postagem_dias, parcelas_max, compra_hora, cliente_lat/lng, vendedor_lat/lng |
-| Binária | 3 | mesmo_estado, compra_fim_semana, sem_info_produto |
-| Categórica (OneHot) | 5 | cliente_estado, vendedor_estado, tipo_pagamento, compra_dia_semana, compra_mes |
-| Categórica (TargetEncoder) | 1 | categoria_produto |
+### Itens do pedido (agregados por pedido)
 
-A tabela completa, com descrição de cada feature, é gerada em
+| Feature | O que representa | Origem | Tratamento |
+|---|---|---|---|
+| `n_itens` | Quantidade de itens | items | mediana + RobustScaler |
+| `n_produtos` | Produtos distintos | items | mediana + RobustScaler |
+| `n_vendedores` | Vendedores distintos | items | mediana + RobustScaler |
+| `preco_total` | Soma dos preços (R$) | items | mediana + log1p + StandardScaler |
+| `frete_total` | Soma do frete (R$) | items | mediana + log1p + StandardScaler |
+| `razao_frete_preco` | frete_total / preco_total | derivada | mediana + log1p + StandardScaler |
+| `peso_total_g` | Soma do peso (g) | products | mediana + log1p + StandardScaler |
+| `volume_total_cm3` | Soma do volume (comp × alt × larg) | products | mediana + log1p + StandardScaler |
+| `sem_info_produto` | 1 se peso ou dimensões estavam ausentes | derivada | moda, sem escala |
+| `categoria_produto` | Categoria do item de maior valor | products + translation | "desconhecido" + TargetEncoder |
+
+### Geografia e logística
+
+| Feature | O que representa | Origem | Tratamento |
+|---|---|---|---|
+| `distancia_media_km` | Distância haversine média vendedor→cliente | geolocation | mediana + log1p + StandardScaler |
+| `distancia_max_km` | Maior distância entre os itens | geolocation | mediana + log1p + StandardScaler |
+| `cliente_lat`, `cliente_lng` | Coordenadas do cliente (mediana por CEP) | customers + geolocation | mediana + RobustScaler |
+| `vendedor_lat`, `vendedor_lng` | Coordenadas do vendedor principal | sellers + geolocation | mediana + RobustScaler |
+| `mesmo_estado` | 1 se vendedor e cliente estão na mesma UF | derivada | moda, sem escala |
+| `cliente_estado` | UF do cliente | customers | "desconhecido" + One-Hot |
+| `vendedor_estado` | UF do vendedor principal | sellers | "desconhecido" + One-Hot |
+
+### Prazos
+
+| Feature | O que representa | Origem | Tratamento |
+|---|---|---|---|
+| `prazo_estimado_dias` | Prazo prometido no checkout (estimada − compra) | orders | mediana + RobustScaler |
+| `prazo_postagem_dias` | Prazo limite para o vendedor postar (shipping_limit − compra) | items | mediana + RobustScaler |
+
+### Data da compra
+
+| Feature | O que representa | Origem | Tratamento |
+|---|---|---|---|
+| `compra_hora` | Hora (0–23) | orders | mediana + RobustScaler |
+| `compra_dia_semana` | 0 = segunda … 6 = domingo | orders | "desconhecido" + One-Hot |
+| `compra_mes` | 1 a 12 | orders | "desconhecido" + One-Hot |
+| `compra_fim_semana` | 1 se sábado ou domingo | derivada | moda, sem escala |
+
+### Pagamento
+
+| Feature | O que representa | Origem | Tratamento |
+|---|---|---|---|
+| `tipo_pagamento` | Forma de pagamento predominante (maior valor) | payments | "desconhecido" + One-Hot |
+| `parcelas_max` | Maior número de parcelas | payments | mediana + RobustScaler |
+
+### Contagem por tratamento
+
+| Tratamento | Qtde |
+|---|---|
+| log1p + StandardScaler | 7 |
+| RobustScaler | 11 |
+| Binárias, sem escala | 3 |
+| One-Hot | 5 |
+| TargetEncoder | 1 |
+| **Total** | **27** |
+
+### O que ficou de fora
+
+- **Alvo:** `tempo_entrega_dias`, a variável prevista.
+- **Identificadores:** `order_id` e `data_compra` (só rastreio, não entram no modelo).
+- **Informações posteriores à compra** (risco de vazamento): `order_approved_at`,
+  data de postagem à transportadora e reviews.
+
+A versão completa, com o % de faltantes de cada feature, é gerada em
 `data/processed/resumo_features.csv`.
 
 ---
