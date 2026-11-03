@@ -25,11 +25,22 @@ reproduzir o projeto localmente:
 ```
 .
 ├── docs/                         # roteiro/documentação de cada etapa do trabalho
-│   └── 01_definicao_do_problema.md
+│   ├── 01_definicao_do_problema.md
+│   └── 02_preprocessamento.md
 ├── data/
 │   ├── raw/                      # dataset original (não versionado)
 │   └── processed/                # dados tratados/gerados pelo pipeline
 ├── notebooks/                    # exploração e prototipação
 └── src/                          # código do pipeline (pré-processamento, treino, avaliação)
+    └── preprocessing.py          # engenharia de atributos, limpeza e ColumnTransformer
 ```
+
+## Como executar o pré-processamento
+
+```bash
+pip install -r requirements.txt
+python src/preprocessing.py     # lê data/raw/, grava em data/processed/
+```
+
+Detalhes das decisões em [`docs/02_preprocessamento.md`](docs/02_preprocessamento.md).
 

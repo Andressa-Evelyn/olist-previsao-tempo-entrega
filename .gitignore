@@ -1,0 +1,12 @@
+# dataset original (baixar do Kaggle)
+data/raw/
+
+# artefatos gerados pelo pipeline (reproduzíveis)
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/resumo_features.csv
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
