@@ -1,0 +1,5 @@
+modelo,familia,metodo_busca,candidatos_testados,total_fits,melhores_hiperparametros,rmse_cv_default,rmse_cv_tuned,ganho_rmse_dias,mae_cv_default,mae_cv_tuned,r2_cv_default,r2_cv_tuned,tempo_busca_s
+Ridge,Linear (L2),GridSearchCV,10,50,"{""alpha"": 10.0}",5.8637,5.8637,0.0,4.2624,4.2623,0.3853,0.3853,0.72
+Decision Tree,Árvore de Decisão,GridSearchCV,90,450,"{""max_depth"": 16, ""min_samples_leaf"": 100, ""min_samples_split"": 2}",8.027,5.8675,2.1595,5.6717,4.2292,-0.1522,0.3845,29.88
+KNN,Baseado em Instâncias,RandomizedSearchCV,12,60,"{""weights"": ""distance"", ""p"": 1, ""n_neighbors"": 35}",6.262,5.8472,0.4148,4.5208,4.2182,0.2989,0.3887,157.04
+Random Forest,Ensemble (Bagging),RandomizedSearchCV,10,50,"{""n_estimators"": 150, ""min_samples_split"": 20, ""min_samples_leaf"": 5, ""max_features"": 0.3, ""max_depth"": 20}",5.6289,5.6001,0.0288,4.0626,4.02,0.4335,0.4393,84.88

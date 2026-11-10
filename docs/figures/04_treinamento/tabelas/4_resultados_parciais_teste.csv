@@ -1,0 +1,7 @@
+modelo,familia,estagio,rmse_teste,mae_teste,medae_teste,r2_teste,vies_medio_dias,pct_erro_ate_3d,pct_erro_ate_5d
+Random Forest,Ensemble (Bagging),Tuned,5.5425,3.9968,2.999,0.4398,0.0489,50.02,73.08
+KNN,Baseado em Instâncias,Tuned,5.7774,4.1795,3.1529,0.3914,-0.0435,47.85,71.38
+Decision Tree,Árvore de Decisão,Tuned,5.7928,4.1841,3.096,0.3881,-0.0039,48.76,70.39
+Ridge,Linear (L2),Tuned,6.2406,4.2628,3.2678,0.2898,0.0461,46.32,69.51
+Dummy (Mediana),Baseline (Estatístico),Baseline,7.6251,5.4906,4.0143,-0.0602,-1.8173,37.81,60.02
+Prazo Estimado Olist,Baseline (Negócio),Baseline,14.6347,12.5681,12.1672,-2.9055,11.808,7.67,13.01
