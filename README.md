@@ -28,14 +28,19 @@ reproduzir o projeto localmente:
 │   ├── 01_definicao_do_problema.md
 │   ├── 02_preprocessamento.md
 │   ├── 03_eda.md
-│   └── figures/03_eda/           # figuras (PNG) e tabelas (CSV) da EDA, usadas nos slides
+│   ├── 04_treinamento.md                 # documentação técnica completa do treinamento
+│   ├── 04_treinamento_apresentacao.md    # guia enxuto e simples para os slides/apresentação
+│   └── figures/                  # figuras (PNG) e tabelas (CSV) usadas nos slides
+│       ├── 03_eda/
+│       └── 04_treinamento/
 ├── data/
 │   ├── raw/                      # dataset original (não versionado)
-│   └── processed/                # dados tratados/gerados pelo pipeline
+│   └── processed/                # dados tratados, modelos e predições gerados pelo pipeline
 ├── notebooks/                    # exploração e prototipação
 └── src/                          # código do pipeline (pré-processamento, treino, avaliação)
     ├── preprocessing.py          # engenharia de atributos, limpeza e ColumnTransformer
-    └── eda.py                    # análise exploratória: gera figuras e tabelas
+    ├── eda.py                    # análise exploratória: gera figuras e tabelas
+    └── train.py                  # treinamento, validação cruzada e ajuste de hiperparâmetros
 ```
 
 ## Como executar o pré-processamento
@@ -55,3 +60,12 @@ python src/eda.py               # lê data/raw/, grava em docs/figures/03_eda/
 ```
 
 Roteiro dos slides e principais achados em [`docs/03_eda.md`](docs/03_eda.md).
+
+
+## Como executar o treinamento e ajuste de hiperparâmetros
+
+```bash
+python src/train.py             # lê data/processed/, grava em docs/figures/04_treinamento/ e data/processed/models/
+```
+
+Roteiro dos slides, hiperparâmetros e resultados em [`docs/04_treinamento.md`](docs/04_treinamento.md).

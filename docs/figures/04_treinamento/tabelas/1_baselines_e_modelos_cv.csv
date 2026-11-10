@@ -1,0 +1,11 @@
+modelo,familia,estagio,train_rmse_mean,cv_rmse_mean,cv_rmse_std,cv_mae_mean,cv_mae_std,train_r2_mean,cv_r2_mean,cv_r2_std,tempo_s
+Prazo Estimado Olist,Baseline (Negócio),Baseline,14.5483,14.5482,0.0558,12.4929,0.0463,-2.7838,-2.7844,0.0518,0.0
+Dummy (Mediana),Baseline (Estatístico),Baseline,7.6894,7.6893,0.0477,5.5464,0.038,-0.057,-0.0571,0.0036,0.64
+Ridge,Linear (L2),Default,5.8577,5.8637,0.0486,4.2624,0.0359,0.3866,0.3853,0.0038,0.53
+Decision Tree,Árvore de Decisão,Default,0.0,8.027,0.0664,5.6717,0.052,1.0,-0.1522,0.0232,1.55
+KNN,Baseado em Instâncias,Default,5.1127,6.262,0.0594,4.5208,0.0424,0.5327,0.2989,0.0075,11.47
+Random Forest,Ensemble (Bagging),Default,2.1078,5.6289,0.0466,4.0626,0.0309,0.9206,0.4335,0.0048,40.02
+Ridge,Linear (L2),Tuned,5.8578,5.8637,0.0486,4.2623,0.0358,0.3866,0.3853,0.0038,0.58
+Decision Tree,Árvore de Decisão,Tuned,5.6526,5.8675,0.0459,4.2292,0.037,0.4288,0.3845,0.0056,4.09
+KNN,Baseado em Instâncias,Tuned,0.0,5.8472,0.0484,4.2182,0.0357,1.0,0.3887,0.0037,20.79
+Random Forest,Ensemble (Bagging),Tuned,4.5949,5.6001,0.0564,4.02,0.0413,0.6226,0.4393,0.0059,12.66
