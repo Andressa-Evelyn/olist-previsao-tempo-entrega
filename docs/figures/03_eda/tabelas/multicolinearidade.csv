@@ -1,0 +1,6 @@
+feature_1,feature_2,spearman
+distancia_media_km,distancia_max_km,0.999
+preco_total,razao_frete_preco,-0.785
+peso_total_g,volume_total_cm3,0.781
+distancia_media_km,mesmo_estado,-0.761
+distancia_max_km,mesmo_estado,-0.76

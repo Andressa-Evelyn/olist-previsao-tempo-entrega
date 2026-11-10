@@ -1,0 +1,6 @@
+regra,pedidos,interpretacao
+prazo_postagem_dias > 30,153,prazo para postar de até 1.052 dias: erro de cadastro
+parcelas_max == 0,2,pagamento com 0 parcelas é inválido
+prazo_estimado_dias > 60,204,promessa de entrega acima de 2 meses
+frete_total == 0,334,"frete grátis (legítimo, mas distorce frete/preço)"
+distancia_media_km == 0,23,vendedor e cliente no mesmo prefixo de CEP
