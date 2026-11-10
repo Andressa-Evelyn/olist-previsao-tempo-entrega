@@ -26,13 +26,16 @@ reproduzir o projeto localmente:
 .
 ├── docs/                         # roteiro/documentação de cada etapa do trabalho
 │   ├── 01_definicao_do_problema.md
-│   └── 02_preprocessamento.md
+│   ├── 02_preprocessamento.md
+│   ├── 03_eda.md
+│   └── figures/03_eda/           # figuras (PNG) e tabelas (CSV) da EDA, usadas nos slides
 ├── data/
 │   ├── raw/                      # dataset original (não versionado)
 │   └── processed/                # dados tratados/gerados pelo pipeline
 ├── notebooks/                    # exploração e prototipação
 └── src/                          # código do pipeline (pré-processamento, treino, avaliação)
-    └── preprocessing.py          # engenharia de atributos, limpeza e ColumnTransformer
+    ├── preprocessing.py          # engenharia de atributos, limpeza e ColumnTransformer
+    └── eda.py                    # análise exploratória: gera figuras e tabelas
 ```
 
 ## Como executar o pré-processamento
@@ -44,3 +47,11 @@ python src/preprocessing.py     # lê data/raw/, grava em data/processed/
 
 Detalhes das decisões em [`docs/02_preprocessamento.md`](docs/02_preprocessamento.md).
 
+
+## Como executar a análise exploratória (EDA)
+
+```bash
+python src/eda.py               # lê data/raw/, grava em docs/figures/03_eda/
+```
+
+Roteiro dos slides e principais achados em [`docs/03_eda.md`](docs/03_eda.md).
