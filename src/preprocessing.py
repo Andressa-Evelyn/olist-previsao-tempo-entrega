@@ -43,6 +43,9 @@ PROCESSED_DIR = ROOT / "data" / "processed"
 
 TARGET = "tempo_entrega_dias"
 ID_COLS = ["order_id", "data_compra"]
+# Coluna de referência da Olist: mantida no olist_dataset.csv para a EDA e como
+# baseline de negócio nos Tópicos 4 e 5, mas NÃO entra como feature dos modelos.
+AUX_COLS = ["prazo_estimado_dias"]
 
 # Limites aproximados do território brasileiro (descarta coordenadas inválidas)
 BR_LAT = (-34.0, 6.0)
@@ -77,7 +80,6 @@ NUM_ROBUST = {
     "n_itens": "Quantidade de itens no pedido",
     "n_produtos": "Quantidade de produtos distintos",
     "n_vendedores": "Quantidade de vendedores distintos",
-    "prazo_estimado_dias": "Prazo prometido no checkout (estimada − compra), em dias",
     "prazo_postagem_dias": "Prazo limite de postagem do vendedor (shipping_limit − compra), em dias",
     "parcelas_max": "Maior número de parcelas do pagamento",
     "compra_hora": "Hora da compra (0–23)",
@@ -302,7 +304,7 @@ def build_order_dataset(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
     df["mesmo_estado"] = (df["vendedor_estado"] == df["cliente_estado"]).astype(int)
     df["tipo_pagamento"] = df["tipo_pagamento"].replace("not_defined", np.nan)
 
-    cols = ID_COLS + [TARGET] + ALL_FEATURES
+    cols = ID_COLS + AUX_COLS + [TARGET] + ALL_FEATURES
     return df[cols].reset_index(drop=True)
 
 
@@ -320,10 +322,21 @@ def clean_dataset(df: pd.DataFrame, iqr_k: float = 3.0) -> tuple[pd.DataFrame, d
     df = df[df[TARGET] > 0]
     report["target_nao_positivo"] = n - len(df)
 
-    # prazo estimado / postagem inconsistentes -> ausente (imputado depois)
+    # prazo estimado / postagem / parcelas inconsistentes -> ausente (imputado depois)
     inval = (df["prazo_estimado_dias"] <= 0).sum()
     df.loc[df["prazo_estimado_dias"] <= 0, "prazo_estimado_dias"] = np.nan
     report["prazo_estimado_invalido_p_nan"] = int(inval)
+
+    inval_post = ((df["prazo_postagem_dias"] <= 0) | (df["prazo_postagem_dias"] > 30)).sum()
+    df.loc[
+        (df["prazo_postagem_dias"] <= 0) | (df["prazo_postagem_dias"] > 30),
+        "prazo_postagem_dias",
+    ] = np.nan
+    report["prazo_postagem_invalido_p_nan"] = int(inval_post)
+
+    inval_parc = (df["parcelas_max"] <= 0).sum()
+    df.loc[df["parcelas_max"] <= 0, "parcelas_max"] = np.nan
+    report["parcelas_invalido_p_nan"] = int(inval_parc)
 
     # outliers EXTREMOS do target (acima de Q3 + k*IQR): entregas atípicas
     q1, q3 = df[TARGET].quantile([0.25, 0.75])

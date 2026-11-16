@@ -1,28 +1,27 @@
 feature_original,importancia,importancia_pct,importancia_acum_pct,descricao
-prazo_estimado_dias,0.1275390900643688,12.75,12.75,Prazo estimado pela Olist (dias)
-mesmo_estado,0.11361019548204637,11.36,24.11,Vendedor e cliente no mesmo estado
-compra_mes,0.10004366254735472,10.0,34.11,Mês da compra (One-Hot)
-distancia_media_km,0.09206540502261656,9.21,43.32,Distância média vend.→cliente (km)
-distancia_max_km,0.09117612581346006,9.12,52.44,Distância máxima vend.→cliente (km)
-cliente_lat,0.07363961014710194,7.36,59.8,Latitude do cliente
-prazo_postagem_dias,0.07148702595487186,7.15,66.95,Prazo limite de postagem (dias)
-cliente_estado,0.06463664261233142,6.46,73.41,UF do cliente (One-Hot)
-cliente_lng,0.03317080502683047,3.32,76.73,Longitude do cliente
-frete_total,0.03186106005454933,3.19,79.92,Frete total (R$)
-vendedor_lat,0.02855986007395929,2.86,82.78,Latitude do vendedor
-categoria_produto,0.02604293335664765,2.6,85.38,Categoria do produto (TargetEncoder)
-vendedor_lng,0.025875755581600202,2.59,87.97,Longitude do vendedor
-volume_total_cm3,0.020048133068724876,2.0,89.97,Volume total do produto (cm³)
-peso_total_g,0.01974902576809723,1.97,91.94,Peso total do produto (g)
-razao_frete_preco,0.01774444017243556,1.77,93.71,Razão frete / preço
-preco_total,0.01707525657174547,1.71,95.42,Preço total do pedido (R$)
-compra_hora,0.01171160070486059,1.17,96.59,Hora da compra
-compra_dia_semana,0.010523070424001036,1.05,97.64,Dia da semana da compra (One-Hot)
-vendedor_estado,0.007843870946405587,0.78,98.42,UF do vendedor (One-Hot)
-parcelas_max,0.006648290346573222,0.66,99.08,Parcelas (máx.)
-tipo_pagamento,0.005009093577898431,0.5,99.58,Tipo de pagamento (One-Hot)
-compra_fim_semana,0.0015480031523879454,0.15,99.73,compra_fim_semana
-n_itens,0.0012535409922644894,0.13,99.86,n_itens
-n_produtos,0.0007088851364491312,0.07,99.93,n_produtos
-n_vendedores,0.00042861740041757513,0.04,99.97,n_vendedores
-sem_info_produto,0.0,0.0,99.97,sem_info_produto
+mesmo_estado,0.17887618355510432,17.89,17.89,Vendedor e cliente no mesmo estado
+distancia_media_km,0.13601308592335212,13.6,31.49,Distância média vend.→cliente (km)
+compra_mes,0.11746451896103603,11.75,43.24,Mês da compra (One-Hot)
+prazo_postagem_dias,0.09989986355051497,9.99,53.23,Prazo limite de postagem (dias)
+cliente_lat,0.09026157170757527,9.03,62.26,Latitude do cliente
+distancia_max_km,0.0767257403732139,7.67,69.93,Distância máxima vend.→cliente (km)
+cliente_estado,0.0678710371587514,6.79,76.72,UF do cliente (One-Hot)
+frete_total,0.03450027872116828,3.45,80.17,Frete total (R$)
+vendedor_lat,0.02831013399871364,2.83,83.0,Latitude do vendedor
+cliente_lng,0.026594124996389155,2.66,85.66,Longitude do cliente
+categoria_produto,0.02452832801993379,2.45,88.11,Categoria do produto (TargetEncoder)
+vendedor_lng,0.023964416987105476,2.4,90.51,Longitude do vendedor
+peso_total_g,0.01722625896050729,1.72,92.23,Peso total do produto (g)
+volume_total_cm3,0.01682260038336979,1.68,93.91,Volume total do produto (cm³)
+razao_frete_preco,0.014089405848101458,1.41,95.32,Razão frete / preço
+preco_total,0.013041693931919021,1.3,96.62,Preço total do pedido (R$)
+compra_hora,0.009200812665414185,0.92,97.54,Hora da compra
+vendedor_estado,0.006914340364766752,0.69,98.23,UF do vendedor (One-Hot)
+compra_dia_semana,0.006370661446101638,0.64,98.87,Dia da semana da compra (One-Hot)
+parcelas_max,0.005460956088041035,0.55,99.42,Parcelas (máx.)
+tipo_pagamento,0.0031718893449046845,0.32,99.74,Tipo de pagamento (One-Hot)
+compra_fim_semana,0.0012342369328043063,0.12,99.86,compra_fim_semana
+n_itens,0.0008708719612675692,0.09,99.95,n_itens
+n_produtos,0.0003498711332190873,0.03,99.98,n_produtos
+n_vendedores,0.00023711698672470205,0.02,100.0,n_vendedores
+sem_info_produto,0.0,0.0,100.0,sem_info_produto

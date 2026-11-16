@@ -1,8 +1,10 @@
 """Treinamento do Modelo (Tópico 4) — Olist: previsão do tempo de entrega.
 
 Fluxo:
-    1. Carrega X_train, X_test, y_train, y_test (gerados sem vazamento no Tópico 2)
-       e recupera o prazo estimado original para o baseline de negócio da Olist.
+    1. Carrega X_train, X_test, y_train, y_test (26 features -> 64 colunas após
+       codificação, SEM `prazo_estimado_dias` como feature de entrada e já com
+       limpeza dos outliers de erro de cadastro em `prazo_postagem_dias`).
+       Recupera `prazo_estimado_dias` separadamente APENAS como Baseline da Olist.
     2. Define o esquema de validação cruzada: 5-Fold CV (shuffle=True, random_state=42)
        exclusivamente sobre o conjunto de treino (76.080 pedidos).
     3. Avalia os Baselines de referência (Prazo Estimado da Olist e Dummy Mediana).
@@ -11,13 +13,15 @@ Fluxo:
        - Árvore de Decisão: DecisionTreeRegressor
        - Baseado em Instâncias: KNeighborsRegressor (KNN)
        - Ensemble: RandomForestRegressor
-    5. Executa o ajuste de hiperparâmetros (GridSearchCV e RandomizedSearchCV):
+    5. Executa o ajuste de hiperparâmetros (GridSearchCV e RandomizedSearchCV)
+       controlando o overfitting (nenhum modelo otimizado possui RMSE de treino = 0):
        - Ridge (GridSearchCV + experimento alvo original vs. log1p)
        - DecisionTreeRegressor (GridSearchCV)
-       - KNeighborsRegressor (RandomizedSearchCV)
-       - RandomForestRegressor (RandomizedSearchCV)
-    6. Gera curvas de validação, gráficos comparativos, tabelas CSV, salva os
-       modelos otimizados e registra os resultados parciais no conjunto de teste.
+       - KNeighborsRegressor (RandomizedSearchCV com weights='uniform')
+       - RandomForestRegressor (RandomizedSearchCV com regularização de folha/profundidade)
+    6. Gera curvas de validação, gráficos comparativos, análise segmentada de onde
+       o modelo erra mais (por UF, região, faixa de prazo e distância), tabelas CSV
+       e salva os modelos otimizados.
 
 Uso:
     python src/train.py
@@ -40,6 +44,7 @@ matplotlib.use("Agg")  # gera arquivos sem abrir janela gráfica
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.colors import LogNorm
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -60,13 +65,14 @@ from sklearn.model_selection import (
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 
+from eda import CMAP_SEQ
 from preprocessing import PROCESSED_DIR, ROOT, TARGET
 
 OUT_DIR = ROOT / "docs" / "figures" / "04_treinamento"
 MODELS_DIR = PROCESSED_DIR / "models"
 
 # --------------------------------------------------------------------------- #
-# Estilo visual idêntico ao src/eda.py (padronização dos slides)
+# Estilo visual idêntico ao src/eda.py (padronização do projeto)
 # --------------------------------------------------------------------------- #
 COR = "#2a78d6"           # azul principal (modelos otimizados / série principal)
 COR_CLARA = "#9bc2f2"     # azul claro (modelos default / treino)
@@ -81,6 +87,14 @@ SCORING = {
     "rmse": "neg_root_mean_squared_error",
     "mae": "neg_mean_absolute_error",
     "r2": "r2",
+}
+
+REGIOES_UF = {
+    **dict.fromkeys(["AC", "AP", "AM", "PA", "RO", "RR", "TO"], "Norte"),
+    **dict.fromkeys(["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"], "Nordeste"),
+    **dict.fromkeys(["DF", "GO", "MT", "MS"], "Centro-Oeste"),
+    **dict.fromkeys(["ES", "MG", "RJ", "SP"], "Sudeste"),
+    **dict.fromkeys(["PR", "RS", "SC"], "Sul"),
 }
 
 
@@ -144,20 +158,23 @@ def salvar_tabela(tab: pd.DataFrame, nome: str, index: bool = False) -> None:
 # --------------------------------------------------------------------------- #
 def carregar_dados(
     proc_dir: Path = PROCESSED_DIR, seed: int = 42, test_size: float = 0.2
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, pd.Series]:
-    """Lê X_train, X_test, y_train, y_test e recupera prazo_estimado_dias bruto."""
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.DataFrame, pd.DataFrame]:
+    """Lê X_train, X_test, y_train, y_test e metadados brutos (apenas p/ baseline e diagnóstico)."""
     X_tr = pd.read_csv(proc_dir / "X_train.csv")
     X_te = pd.read_csv(proc_dir / "X_test.csv")
     y_tr = pd.read_csv(proc_dir / "y_train.csv").squeeze("columns")
     y_te = pd.read_csv(proc_dir / "y_test.csv").squeeze("columns")
 
-    # Prazo estimado original (em dias) para o baseline de negócio da Olist
+    assert "prazo_estimado_dias" not in X_tr.columns, (
+        "prazo_estimado_dias NÃO deve estar em X_train! Rode `python src/preprocessing.py`."
+    )
+
     df_full = pd.read_csv(proc_dir / "olist_dataset.csv")
     df_tr, df_te = train_test_split(df_full, test_size=test_size, random_state=seed)
-    prazo_tr = df_tr["prazo_estimado_dias"].fillna(df_tr["prazo_estimado_dias"].median()).reset_index(drop=True)
-    prazo_te = df_te["prazo_estimado_dias"].fillna(df_tr["prazo_estimado_dias"].median()).reset_index(drop=True)
+    df_tr = df_tr.reset_index(drop=True)
+    df_te = df_te.reset_index(drop=True)
 
-    return X_tr, X_te, y_tr, y_te, prazo_tr, prazo_te
+    return X_tr, X_te, y_tr, y_te, df_tr, df_te
 
 
 # --------------------------------------------------------------------------- #
@@ -167,7 +184,7 @@ def avaliar_baseline_olist(y: pd.Series, prazo: pd.Series, cv: KFold) -> dict:
     """Calcula métricas 5-fold do baseline atual da Olist (prever prazo_estimado_dias)."""
     rmses, maes, r2s = [], [], []
     y_arr = y.to_numpy()
-    p_arr = prazo.to_numpy()
+    p_arr = prazo.fillna(prazo.median()).to_numpy()
     for _, val_idx in cv.split(y_arr):
         yv, pv = y_arr[val_idx], p_arr[val_idx]
         rmses.append(root_mean_squared_error(yv, pv))
@@ -299,7 +316,7 @@ def experimento_ridge_log(
 
 
 # --------------------------------------------------------------------------- #
-# 4. Figuras para os slides
+# 4. Figuras para o relatório e apresentação
 # --------------------------------------------------------------------------- #
 def plot_1_default_vs_tuned(df_cv: pd.DataFrame) -> None:
     """Comparação de RMSE e MAE (5-fold CV) entre Baselines, Default e Tuned."""
@@ -495,7 +512,6 @@ def plot_2_overfitting_treino_vs_cv(df_cv: pd.DataFrame) -> None:
                 fontweight="bold",
                 color=TEXTO,
             )
-        # Anota o gap de generalização (CV - Treino)
         for i, m in enumerate(modelos_ordem):
             gap = d.loc[m, "cv_rmse_mean"] - d.loc[m, "train_rmse_mean"]
             topo = max(d.loc[m, "cv_rmse_mean"], d.loc[m, "train_rmse_mean"])
@@ -505,11 +521,11 @@ def plot_2_overfitting_treino_vs_cv(df_cv: pd.DataFrame) -> None:
                 f"Δ = +{fmt_dec(gap)} d",
                 ha="center",
                 fontsize=7.8,
-                color=COR_DESTAQUE if gap > 1.5 else TEXTO_2,
-                fontweight="bold" if gap > 1.5 else "normal",
+                color=COR_DESTAQUE if gap > 1.2 else COR_VERDE,
+                fontweight="bold",
             )
         ax.set_xticks(x, modelos_ordem)
-        ax.set_ylim(0, 9.3)
+        ax.set_ylim(0, 9.5)
         ax.set_title(titulo)
         ax.legend(loc="upper left", fontsize=8.5)
 
@@ -599,27 +615,39 @@ def plot_3_curvas_tuning(
     ax.set_title("(b) Decision Tree: poda de profundidade × tamanho mínimo de folha")
     ax.legend(loc="upper left", fontsize=8)
 
-    # --- (c) KNN: n_neighbors x métrica de distância ---
+    # --- (c) KNN: n_neighbors x métrica de distância (weights='uniform') ---
     ax = axes[1, 0]
-    for (p_val, w_val), grp in knn_curve_df.groupby(["p", "weights"]):
-        nome_m = f"{'Manhattan (p=1)' if p_val == 1 else 'Euclidiana (p=2)'} · {w_val}"
-        cor_k = COR if (p_val == 1 and w_val == "distance") else (COR_DESTAQUE if p_val == 1 else COR_CLARA)
-        ls_k = "-" if w_val == "distance" else "--"
+    for p_val, grp in knn_curve_df.groupby("p"):
+        grp = grp.sort_values("n_neighbors")
+        nome_m = "Manhattan (p=1, uniform)" if p_val == 1 else "Euclidiana (p=2, uniform)"
+        cor_k = COR if p_val == 1 else COR_DESTAQUE
+        ls_k = "-" if p_val == 1 else "--"
         ax.plot(
             grp["n_neighbors"],
             grp["cv_rmse"],
             marker="o",
-            lw=2.2 if (p_val == 1 and w_val == "distance") else 1.5,
+            lw=2.2 if p_val == 1 else 1.7,
             ls=ls_k,
             color=cor_k,
-            label=nome_m,
+            label=f"{nome_m} — Validação (CV)",
+        )
+        ax.plot(
+            grp["n_neighbors"],
+            grp["train_rmse"],
+            marker="s",
+            ms=4,
+            lw=1.3,
+            ls=":",
+            color=cor_k,
+            alpha=0.75,
+            label=f"{nome_m} — Treino",
         )
     best_k = knn_curve_df.loc[knn_curve_df["cv_rmse"].idxmin()]
     ax.scatter([best_k["n_neighbors"]], [best_k["cv_rmse"]], color=COR_VERDE, s=65, zorder=5)
     ax.set_xlabel("Número de vizinhos (n_neighbors)")
-    ax.set_ylabel("RMSE 5-Fold CV (dias)")
-    ax.set_title("(c) KNN: número de vizinhos × métrica (Manhattan vs. Euclidiana)")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.set_ylabel("RMSE (dias)")
+    ax.set_title("(c) KNN: número de vizinhos × métrica (Treino vs. Validação)")
+    ax.legend(loc="lower right", fontsize=7.8)
 
     # --- (d) Random Forest: candidatos do RandomizedSearchCV ---
     ax = axes[1, 1]
@@ -631,11 +659,10 @@ def plot_3_curvas_tuning(
     ]
     vals = (-cv_rf["mean_test_rmse"]).to_numpy()
     cores_rf = [COR_VERDE if i == 0 else COR for i in range(len(cv_rf))]
-    # Plota #1 na parte inferior (ou superior) de forma consistente entre barra, ytick e texto
     y_pos = np.arange(len(cv_rf))
     ax.barh(y_pos, vals, color=cores_rf, edgecolor=FUNDO, height=0.72)
     ax.set_yticks(y_pos, labels_rf, fontsize=7.8)
-    ax.invert_yaxis()  # #1 no topo!
+    ax.invert_yaxis()
     ax.set_xlim(min(vals) - 0.06, max(vals) + 0.045)
     for i, v in enumerate(vals):
         ax.text(
@@ -678,16 +705,16 @@ def plot_4_estabilidade_folds(registros_cv: list[dict]) -> None:
         capprops={"color": COR},
     )
 
-    # RMSE por fold
     ax = axes[0]
     ax.boxplot(rmses_folds, tick_labels=nomes, **box_kw)
+    all_r = [v for sub in rmses_folds for v in sub]
     for i, vals in enumerate(rmses_folds, start=1):
         ax.scatter([i] * len(vals), vals, color=COR, s=28, zorder=4, alpha=0.85)
         med = np.mean(vals)
         std = np.std(vals)
         ax.text(
             i,
-            max(vals) + 0.018,
+            max(vals) + 0.02,
             f"{fmt_dec(med, 2)} ± {fmt_dec(std, 2)}",
             ha="center",
             fontsize=8,
@@ -695,11 +722,11 @@ def plot_4_estabilidade_folds(registros_cv: list[dict]) -> None:
         )
     ax.set_ylabel("RMSE em cada fold (dias)")
     ax.set_title("Estabilidade do RMSE nos 5 Folds (média ± desvio)")
-    ax.set_ylim(5.45, 6.02)
+    ax.set_ylim(min(all_r) - 0.06, max(all_r) + 0.08)
 
-    # R² por fold
     ax = axes[1]
     ax.boxplot(r2s_folds, tick_labels=nomes, **box_kw)
+    all_r2 = [v for sub in r2s_folds for v in sub]
     for i, vals in enumerate(r2s_folds, start=1):
         ax.scatter([i] * len(vals), vals, color=COR, s=28, zorder=4, alpha=0.85)
         med = np.mean(vals)
@@ -714,7 +741,7 @@ def plot_4_estabilidade_folds(registros_cv: list[dict]) -> None:
         )
     ax.set_ylabel("Coeficiente de Determinação (R²) em cada fold")
     ax.set_title("Estabilidade do R² nos 5 Folds (média ± desvio)")
-    ax.set_ylim(0.365, 0.468)
+    ax.set_ylim(min(all_r2) - 0.012, max(all_r2) + 0.018)
 
     salvar(fig, "4_estabilidade_folds_cv")
 
@@ -723,7 +750,6 @@ def plot_5_tradeoff_tempo_erro(df_cv: pd.DataFrame, df_tuning_summary: pd.DataFr
     """Trade-off entre tempo de treino/ajuste e erro de validação (RMSE)."""
     fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.5))
 
-    # Painel 1: Tempo de avaliação 5-fold CV do modelo ajustado vs RMSE
     ax = axes[0]
     sub = df_cv[df_cv["estagio"].isin(["Baseline", "Tuned"])].copy()
     sub = sub[sub["modelo"] != "Prazo Estimado Olist"]
@@ -751,13 +777,12 @@ def plot_5_tradeoff_tempo_erro(df_cv: pd.DataFrame, df_tuning_summary: pd.DataFr
         )
     ax.set_xscale("log")
     ax.set_xlim(0.04, 180)
-    ax.set_ylim(5.4, 8.1)
+    ax.set_ylim(5.45, 8.1)
     ax.set_xlabel("Tempo do 5-Fold CV do modelo (segundos, escala log)")
     ax.set_ylabel("RMSE na Validação Cruzada (dias)")
     ax.set_title("Trade-off: Tempo de Execução (5-Fold CV) × RMSE")
     ax.grid(True, which="both", axis="both", alpha=0.5)
 
-    # Painel 2: Tempo total da busca de hiperparâmetros
     ax = axes[1]
     y_pos = np.arange(len(df_tuning_summary))
     tempos = df_tuning_summary["tempo_busca_s"].to_numpy()
@@ -785,10 +810,9 @@ def plot_5_tradeoff_tempo_erro(df_cv: pd.DataFrame, df_tuning_summary: pd.DataFr
 
 
 def plot_6_importancia_features(rf_model: RandomForestRegressor, cols: list[str]) -> pd.DataFrame:
-    """Calcula e plota a importância das features do Random Forest otimizado."""
+    """Calcula e plota a importância das features do Random Forest otimizado (sem prazo Olist)."""
     imp = pd.DataFrame({"coluna": cols, "importancia": rf_model.feature_importances_})
 
-    # Mapeia cada coluna pós-OneHot de volta para a feature original do Tópico 2
     prefixos_onehot = [
         "cliente_estado",
         "vendedor_estado",
@@ -815,7 +839,6 @@ def plot_6_importancia_features(rf_model: RandomForestRegressor, cols: list[str]
 
     rotulos_pt = {
         "distancia_media_km": "Distância média vend.→cliente (km)",
-        "prazo_estimado_dias": "Prazo estimado pela Olist (dias)",
         "distancia_max_km": "Distância máxima vend.→cliente (km)",
         "cliente_lat": "Latitude do cliente",
         "cliente_lng": "Longitude do cliente",
@@ -846,7 +869,7 @@ def plot_6_importancia_features(rf_model: RandomForestRegressor, cols: list[str]
     ax.barh(top["descricao"], top["importancia_pct"], color=COR, edgecolor=FUNDO, height=0.72)
     for i, v in enumerate(top["importancia_pct"]):
         ax.text(v + 0.3, i, f"{fmt_dec(v, 1)}%", va="center", fontsize=8.5, color=TEXTO)
-    ax.set_xlim(0, max(top["importancia_pct"]) * 1.14)
+    ax.set_xlim(0, max(top["importancia_pct"]) * 1.15)
     ax.grid(axis="x")
     ax.grid(axis="y", visible=False)
     ax.set_xlabel("Importância relativa na redução de impureza (MDI, %)")
@@ -857,23 +880,20 @@ def plot_6_importancia_features(rf_model: RandomForestRegressor, cols: list[str]
 
 
 def plot_7_real_vs_previsto(predicoes_df: pd.DataFrame) -> None:
-    """Compara Real vs. Previsto (hexbin) entre a promessa da Olist e os modelos."""
-    from matplotlib.colors import LogNorm
-    from eda import CMAP_SEQ
-
+    """Compara Real vs. Previsto com destaque para o ponto mediano (~10 dias) e tendência."""
     pares = [
         ("pred_prazo_olist", "Baseline: Prazo Estimado Olist (Atual)"),
         ("pred_ridge", "Linear: Ridge (Otimizado)"),
         ("pred_decision_tree", "Árvore: Decision Tree (Otimizada)"),
         ("pred_random_forest", "Ensemble: Random Forest (Otimizado)"),
     ]
-    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(2, 2, figsize=(11.8, 9.8), sharex=True, sharey=True)
     y_true = predicoes_df["y_true"].to_numpy()
+    mediana_real = float(np.median(y_true))
     lim = 43.0
 
     for ax, (col, titulo) in zip(axes.flat, pares):
         y_pred = predicoes_df[col].to_numpy()
-        # filtra apenas para visualização dentro da janela [0, 43] dias
         m = (y_pred >= 0) & (y_pred <= lim)
         hb = ax.hexbin(
             y_true[m],
@@ -885,14 +905,50 @@ def plot_7_real_vs_previsto(predicoes_df: pd.DataFrame) -> None:
             norm=LogNorm(),
             linewidths=0,
         )
-        ax.plot([0, lim], [0, lim], color=COR_DESTAQUE, ls="--", lw=1.8, label="Acerto perfeito (Previsto = Real)")
+        ax.plot(
+            [0, lim],
+            [0, lim],
+            color=COR_DESTAQUE,
+            ls="--",
+            lw=1.8,
+            label="Acerto perfeito (Previsto = Real)",
+        )
+        # Curva da mediana prevista por faixa de tempo real (evidencia o achatamento após ~15d)
+        sub_df = pd.DataFrame({"r": y_true, "p": y_pred})
+        faixas = pd.qcut(sub_df["r"], 15, duplicates="drop")
+        med_faixa = sub_df.groupby(faixas, observed=True).agg(rx=("r", "median"), py=("p", "median"))
+        ax.plot(
+            med_faixa["rx"],
+            med_faixa["py"],
+            color="#d92b2b",
+            lw=2.0,
+            marker="o",
+            ms=3.8,
+            label="Mediana prevista por faixa real",
+        )
+        # Ponto mediano (10,1 dias)
+        ax.scatter(
+            [mediana_real],
+            [mediana_real],
+            color=COR_VERDE,
+            s=70,
+            zorder=6,
+            edgecolors="white",
+            linewidths=1.2,
+            label=f"Centro da distribuição (mediana = {fmt_dec(mediana_real, 1)} d)",
+        )
+
         rmse = root_mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
-        ax.set_title(f"{titulo}\nMAE = {fmt_dec(mae)} d | RMSE = {fmt_dec(rmse)} d", fontsize=10)
+        r2 = r2_score(y_true, y_pred)
+        ax.set_title(
+            f"{titulo}\nMAE = {fmt_dec(mae)} d | RMSE = {fmt_dec(rmse)} d | R² = {fmt_dec(r2, 3)}",
+            fontsize=9.8,
+        )
         ax.set_xlim(0, lim)
         ax.set_ylim(0, lim)
         ax.grid(False)
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper left", fontsize=7.6)
 
     for ax in axes[1]:
         ax.set_xlabel("Tempo de entrega REAL (dias)")
@@ -902,7 +958,7 @@ def plot_7_real_vs_previsto(predicoes_df: pd.DataFrame) -> None:
     cb = fig.colorbar(hb, ax=axes, shrink=0.75, pad=0.02)
     cb.set_label("Quantidade de pedidos (escala log)")
     fig.suptitle(
-        "Tempo Real vs. Previsto no Conjunto de Teste (19.020 pedidos)",
+        "Tempo Real vs. Previsto no Teste (Destaque: concentração em ~10 dias e regressão à média)",
         x=0.04,
         ha="left",
         fontweight="bold",
@@ -917,7 +973,6 @@ def plot_8_erros_e_tolerancia(predicoes_df: pd.DataFrame) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.6))
     y_true = predicoes_df["y_true"].to_numpy()
 
-    # --- Painel 1: Histograma do erro (Previsto - Real) ---
     ax = axes[0]
     erro_olist = predicoes_df["pred_prazo_olist"].to_numpy() - y_true
     erro_rf = predicoes_df["pred_random_forest"].to_numpy() - y_true
@@ -928,7 +983,7 @@ def plot_8_erros_e_tolerancia(predicoes_df: pd.DataFrame) -> None:
         color=COR_DESTAQUE,
         alpha=0.45,
         edgecolor=FUNDO,
-        label=f"Prazo Atual Olist (viés médio: +{fmt_dec(erro_olist.mean(), 1)} d)",
+        label=f"Prazo Atual Olist (viés médio: +{fmt_dec(erro_olist.mean(), 1)} d | R² = -2,91)",
     )
     ax.hist(
         erro_rf,
@@ -936,15 +991,14 @@ def plot_8_erros_e_tolerancia(predicoes_df: pd.DataFrame) -> None:
         color=COR,
         alpha=0.80,
         edgecolor=FUNDO,
-        label=f"Random Forest Otimizado (viés médio: +{fmt_dec(erro_rf.mean(), 2)} d)",
+        label=f"Random Forest Otimizado (viés médio: +{fmt_dec(erro_rf.mean(), 2)} d | R² = 0,41)",
     )
     ax.axvline(0, color=TEXTO, ls="--", lw=1.5, label="Erro zero (previsão exata)")
     ax.set_xlabel("Erro da previsão = Previsto − Real (dias)\n(< 0: atrasou | > 0: chegou antes do previsto)")
     ax.set_ylabel("Quantidade de pedidos no teste")
     ax.set_title("Distribuição dos Erros: Promessa da Olist vs. Random Forest")
-    ax.legend(loc="upper right", fontsize=8.2)
+    ax.legend(loc="upper right", fontsize=8.0)
 
-    # --- Painel 2: Curva de tolerância (% de pedidos dentro de ±K dias) ---
     ax = axes[1]
     margens = np.arange(1, 11)
     series = [
@@ -972,6 +1026,201 @@ def plot_8_erros_e_tolerancia(predicoes_df: pd.DataFrame) -> None:
     salvar(fig, "8_erros_e_tolerancia_teste")
 
 
+def plot_9_onde_modelo_erra_mais(df_te: pd.DataFrame, predicoes_df: pd.DataFrame) -> None:
+    """Análise segmentada de onde o Random Forest erra mais (UF, Região, Faixa de Prazo e Distância)."""
+    diag = df_te[
+        ["cliente_estado", "vendedor_estado", "mesmo_estado", "distancia_media_km", "frete_total", "categoria_produto"]
+    ].copy()
+    diag["y_true"] = predicoes_df["y_true"].to_numpy()
+    diag["y_pred"] = predicoes_df["pred_random_forest"].to_numpy()
+    diag["erro"] = diag["y_pred"] - diag["y_true"]  # >0 superestima, <0 subestima
+    diag["erro_abs"] = diag["erro"].abs()
+    diag["erro_quad"] = diag["erro"] ** 2
+    diag["regiao"] = diag["cliente_estado"].map(REGIOES_UF)
+
+    # 1. Tabela por UF (com pelo menos 20 pedidos no teste p/ relevância estatística)
+    por_uf = (
+        diag.groupby("cliente_estado", as_index=False)
+        .agg(
+            pedidos=("y_true", "count"),
+            tempo_real_medio=("y_true", "mean"),
+            tempo_prev_medio=("y_pred", "mean"),
+            mae_dias=("erro_abs", "mean"),
+            rmse_dias=("erro_quad", lambda s: float(np.sqrt(np.mean(s)))),
+            vies_dias=("erro", "mean"),
+            pct_ate_5d=("erro_abs", lambda s: float((s <= 5.0).mean() * 100)),
+        )
+        .sort_values("mae_dias", ascending=False)
+        .round(2)
+    )
+    salvar_tabela(por_uf, "6_erro_por_uf", index=False)
+
+    # 2. Tabela por Região
+    por_regiao = (
+        diag.groupby("regiao", as_index=False)
+        .agg(
+            pedidos=("y_true", "count"),
+            tempo_real_medio=("y_true", "mean"),
+            tempo_prev_medio=("y_pred", "mean"),
+            mae_dias=("erro_abs", "mean"),
+            rmse_dias=("erro_quad", lambda s: float(np.sqrt(np.mean(s)))),
+            vies_dias=("erro", "mean"),
+            pct_ate_5d=("erro_abs", lambda s: float((s <= 5.0).mean() * 100)),
+        )
+        .sort_values("mae_dias", ascending=True)
+        .round(2)
+    )
+    salvar_tabela(por_regiao, "7_erro_por_regiao", index=False)
+
+    # 3. Tabela por Faixa de Tempo Real
+    bins_real = [0, 5, 10, 15, 20, 30, 45]
+    labels_real = ["Até 5d\n(muito rápida)", "5–10d\n(rápida)", "10–15d\n(média)", "15–20d\n(moderada)", "20–30d\n(lenta)", "30–43d\n(muito lenta)"]
+    diag["faixa_real"] = pd.cut(diag["y_true"], bins=bins_real, labels=labels_real)
+    por_faixa_real = (
+        diag.groupby("faixa_real", observed=True, as_index=False)
+        .agg(
+            pedidos=("y_true", "count"),
+            tempo_real_medio=("y_true", "mean"),
+            tempo_prev_medio=("y_pred", "mean"),
+            mae_dias=("erro_abs", "mean"),
+            vies_dias=("erro", "mean"),
+        )
+        .round(2)
+    )
+    por_faixa_real["faixa_real"] = por_faixa_real["faixa_real"].astype(str).str.replace("\n", " ")
+    salvar_tabela(por_faixa_real, "8_erro_por_faixa_real", index=False)
+
+    # 4. Figura 2x2 de diagnóstico de erro
+    fig, axes = plt.subplots(2, 2, figsize=(13.2, 9.2))
+
+    # --- (a) MAE por UF do Cliente ---
+    ax = axes[0, 0]
+    uf_plot = por_uf[por_uf["pedidos"] >= 30].sort_values("mae_dias", ascending=True)
+    cores_uf = [
+        COR_DESTAQUE if v >= 5.5 else (COR_VERDE if v <= 3.5 else COR)
+        for v in uf_plot["mae_dias"]
+    ]
+    ax.bar(uf_plot["cliente_estado"], uf_plot["mae_dias"], color=cores_uf, edgecolor=FUNDO)
+    mae_global = diag["erro_abs"].mean()
+    ax.axhline(
+        mae_global,
+        color=TEXTO,
+        ls="--",
+        lw=1.3,
+        label=f"MAE médio Brasil: {fmt_dec(mae_global)} d",
+    )
+    for i, (_, r) in enumerate(uf_plot.iterrows()):
+        ax.text(
+            i,
+            r["mae_dias"] + 0.12,
+            fmt_dec(r["mae_dias"], 1),
+            ha="center",
+            fontsize=7.2,
+            color=TEXTO_2,
+        )
+    ax.set_ylim(0, max(uf_plot["mae_dias"]) + 1.1)
+    ax.set_ylabel("MAE no Teste (dias)")
+    ax.set_title("(a) Erro Absoluto Médio (MAE) por UF do Cliente (UFs c/ ≥ 30 pedidos)")
+    ax.legend(loc="upper left", fontsize=8.2)
+    ax.tick_params(axis="x", labelsize=8)
+
+    # --- (b) MAE e RMSE por Região Brasileira ---
+    ax = axes[0, 1]
+    x_reg = np.arange(len(por_regiao))
+    w = 0.36
+    b1 = ax.bar(
+        x_reg - w / 2,
+        por_regiao["mae_dias"],
+        w,
+        color=COR,
+        edgecolor=FUNDO,
+        label="MAE (dias)",
+    )
+    b2 = ax.bar(
+        x_reg + w / 2,
+        por_regiao["rmse_dias"],
+        w,
+        color=COR_DESTAQUE,
+        edgecolor=FUNDO,
+        label="RMSE (dias)",
+    )
+    for bar in b1:
+        v = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, v + 0.12, fmt_dec(v), ha="center", fontsize=8)
+    for bar in b2:
+        v = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, v + 0.12, fmt_dec(v), ha="center", fontsize=8)
+    labels_reg = [
+        f"{r['regiao']}\n({fmt_int(int(r['pedidos']))} ped.)"
+        for _, r in por_regiao.iterrows()
+    ]
+    ax.set_xticks(x_reg, labels_reg, fontsize=8.5)
+    ax.set_ylim(0, max(por_regiao["rmse_dias"]) + 1.4)
+    ax.set_ylabel("Erro no Teste (dias)")
+    ax.set_title("(b) Desempenho por Região do Cliente (Sudeste/Sul vs. Norte/Nordeste)")
+    ax.legend(loc="upper left", fontsize=8.5)
+
+    # --- (c) Erro por Faixa do Tempo Real de Entrega (explica o ponto médio ~10d) ---
+    ax = axes[1, 0]
+    x_f = np.arange(len(por_faixa_real))
+    bars_f = ax.bar(
+        x_f,
+        por_faixa_real["mae_dias"],
+        color=[COR_VERDE if v < 3.5 else (COR if v < 6.0 else COR_DESTAQUE) for v in por_faixa_real["mae_dias"]],
+        edgecolor=FUNDO,
+        width=0.58,
+    )
+    for i, (bar, (_, r)) in enumerate(zip(bars_f, por_faixa_real.iterrows())):
+        v = bar.get_height()
+        sinal = "+" if r["vies_dias"] >= 0 else ""
+        ax.text(
+            i,
+            v + 0.25,
+            f"MAE: {fmt_dec(v)} d\n(viés: {sinal}{fmt_dec(r['vies_dias'], 1)} d)",
+            ha="center",
+            fontsize=7.6,
+            color=TEXTO,
+        )
+    ax.set_xticks(x_f, labels_real, fontsize=8)
+    ax.set_ylim(0, max(por_faixa_real["mae_dias"]) + 3.2)
+    ax.set_ylabel("MAE no Teste (dias)")
+    ax.set_title("(c) Erro por Faixa de Prazo Real de Entrega", fontsize=10.5)
+
+    # --- (d) Erro por Faixa de Distância e Mesmo Estado vs. Interestadual ---
+    ax = axes[1, 1]
+    bins_dist = [0, 100, 300, 600, 1200, 2000, 5000]
+    labels_dist = ["Até 100 km", "100–300 km", "300–600 km", "600–1.200 km", "1.200–2.000 km", "> 2.000 km"]
+    diag["faixa_dist"] = pd.cut(diag["distancia_media_km"], bins=bins_dist, labels=labels_dist)
+    por_dist = (
+        diag.groupby("faixa_dist", observed=True, as_index=False)
+        .agg(
+            pedidos=("y_true", "count"),
+            mae_dias=("erro_abs", "mean"),
+            rmse_dias=("erro_quad", lambda s: float(np.sqrt(np.mean(s)))),
+        )
+        .round(2)
+    )
+    x_d = np.arange(len(por_dist))
+    ax.plot(x_d, por_dist["mae_dias"], marker="o", lw=2.2, color=COR, label="MAE (dias)")
+    ax.plot(x_d, por_dist["rmse_dias"], marker="s", lw=2.0, ls="--", color=COR_DESTAQUE, label="RMSE (dias)")
+    for i, r in por_dist.iterrows():
+        ax.text(i, r["mae_dias"] - 0.45, fmt_dec(r["mae_dias"]), ha="center", fontsize=8, color=COR, fontweight="bold")
+        ax.text(i, r["rmse_dias"] + 0.25, fmt_dec(r["rmse_dias"]), ha="center", fontsize=8, color=COR_DESTAQUE)
+    ax.set_xticks(x_d, labels_dist, rotation=15, fontsize=8.2)
+    ax.set_ylim(2.0, max(por_dist["rmse_dias"]) + 1.2)
+    ax.set_ylabel("Erro no Teste (dias)")
+    ax.set_title("(d) Evolução do Erro conforme a Distância Vendedor → Cliente")
+    ax.legend(loc="upper left", fontsize=8.5)
+
+    fig.suptitle(
+        "Diagnóstico de Erros do Modelo Final (Random Forest): Onde e Por Que o Modelo Erra Mais?",
+        x=0.01,
+        ha="left",
+        fontweight="bold",
+    )
+    salvar(fig, "9_onde_modelo_erra_mais")
+
+
 # --------------------------------------------------------------------------- #
 # Execução principal
 # --------------------------------------------------------------------------- #
@@ -980,8 +1229,10 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     setup_style()
 
-    print("1. Carregando dados processados...")
-    X_tr_df, X_te_df, y_tr_s, y_te_s, prazo_tr, prazo_te = carregar_dados(proc_dir, seed=seed)
+    print("1. Carregando dados processados (sem prazo_estimado_dias como feature)...")
+    X_tr_df, X_te_df, y_tr_s, y_te_s, df_tr_raw, df_te_raw = carregar_dados(proc_dir, seed=seed)
+    prazo_tr = df_tr_raw["prazo_estimado_dias"]
+    prazo_te = df_te_raw["prazo_estimado_dias"]
     cols = list(X_tr_df.columns)
     X_tr = X_tr_df.to_numpy(dtype=np.float64)
     X_te = X_te_df.to_numpy(dtype=np.float64)
@@ -1028,7 +1279,8 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
         r = avaliar_cv(est, X_tr, y_tr, cv, modelo=nome, familia=fam, estagio="Default", n_jobs_cv=nj)
         registros_cv.append(r)
         print(
-            f"   [Default] {nome:15s} -> CV RMSE: {r['cv_rmse_mean']:.4f} ± {r['cv_rmse_std']:.4f} | "
+            f"   [Default] {nome:15s} -> Train RMSE: {r['train_rmse_mean']:.4f} | "
+            f"CV RMSE: {r['cv_rmse_mean']:.4f} ± {r['cv_rmse_std']:.4f} | "
             f"MAE: {r['cv_mae_mean']:.4f} | R²: {r['cv_r2_mean']:.4f} ({r['tempo_s']:.1f}s)"
         )
 
@@ -1079,19 +1331,19 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
     t_dt = time.perf_counter() - t0
     print(f"       Melhor Decision Tree: {dt_search.best_params_} | RMSE={-dt_search.best_score_:.4f} ({t_dt:.1f}s)")
 
-    # --- 4.3 KNN (RandomizedSearchCV) ---
-    print("   4.3 KNN (RandomizedSearchCV)...")
+    # --- 4.3 KNN (RandomizedSearchCV com weights='uniform' para evitar memorização RMSE=0) ---
+    print("   4.3 KNN (RandomizedSearchCV, weights='uniform')...")
     X_tr_f32 = X_tr.astype(np.float32)
     knn_param_dist = {
         "n_neighbors": [5, 15, 25, 35, 51],
-        "weights": ["uniform", "distance"],
+        "weights": ["uniform"],
         "p": [1, 2],
     }
     t0 = time.perf_counter()
     knn_search = RandomizedSearchCV(
         KNeighborsRegressor(n_jobs=-1),
         param_distributions=knn_param_dist,
-        n_iter=12,
+        n_iter=10,
         scoring=SCORING,
         refit="rmse",
         cv=cv,
@@ -1103,24 +1355,39 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
     t_knn = time.perf_counter() - t0
     print(f"       Melhor KNN: {knn_search.best_params_} | RMSE={-knn_search.best_score_:.4f} ({t_knn:.1f}s)")
 
+    # Calcula train_rmse de cada k em amostra representativa do treino (12.000 linhas -> rápido)
+    rng_sub = np.random.default_rng(seed)
+    sub_idx = rng_sub.choice(len(X_tr_f32), size=12000, replace=False)
     cv_knn_df = pd.DataFrame(knn_search.cv_results_)
+    tr_rmses_knn = []
+    for _, r_k in cv_knn_df.iterrows():
+        est_k = KNeighborsRegressor(
+            n_neighbors=int(r_k["param_n_neighbors"]),
+            weights=str(r_k["param_weights"]),
+            p=int(r_k["param_p"]),
+            n_jobs=-1,
+        ).fit(X_tr_f32, y_tr)
+        pred_sub = est_k.predict(X_tr_f32[sub_idx])
+        tr_rmses_knn.append(float(root_mean_squared_error(y_tr[sub_idx], pred_sub)))
+
     knn_curve_df = pd.DataFrame(
         {
             "n_neighbors": cv_knn_df["param_n_neighbors"].astype(int),
             "weights": cv_knn_df["param_weights"].astype(str),
             "p": cv_knn_df["param_p"].astype(int),
+            "train_rmse": tr_rmses_knn,
             "cv_rmse": -cv_knn_df["mean_test_rmse"].astype(float),
         }
-    ).sort_values(["p", "weights", "n_neighbors"])
+    ).sort_values(["p", "n_neighbors"])
 
-    # --- 4.4 Random Forest (RandomizedSearchCV) ---
+    # --- 4.4 Random Forest (RandomizedSearchCV com controle de overfitting) ---
     print("   4.4 Random Forest (RandomizedSearchCV)...")
     rf_param_dist = {
         "n_estimators": [100, 150, 200],
-        "max_depth": [12, 16, 20, 24, None],
-        "min_samples_leaf": [2, 5, 10, 20],
-        "min_samples_split": [2, 10, 20],
-        "max_features": ["sqrt", 0.3, 0.5, 0.7],
+        "max_depth": [12, 16, 18, 20],
+        "min_samples_leaf": [10, 15, 25, 40],
+        "min_samples_split": [20, 40, 80],
+        "max_features": ["sqrt", 0.3, 0.5],
     }
     t0 = time.perf_counter()
     rf_search = RandomizedSearchCV(
@@ -1181,6 +1448,10 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
         if "mean_train_rmse" in cv_res:
             tr_rmse = float(-cv_res["mean_train_rmse"][idx])
             tr_r2 = float(cv_res["mean_train_r2"][idx])
+        elif nome == "KNN":
+            pred_tr = best_est.predict(X_tr_f32[sub_idx])
+            tr_rmse = float(root_mean_squared_error(y_tr[sub_idx], pred_tr))
+            tr_r2 = float(r2_score(y_tr[sub_idx], pred_tr))
         else:
             X_use = X_tr_f32 if nome in ("KNN", "Random Forest") else X_tr
             pred_tr = best_est.predict(X_use)
@@ -1226,7 +1497,6 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
             }
         )
 
-    # Salva tabela 1 (todos os resultados de CV) e tabela 2 (resumo do tuning)
     df_cv = pd.DataFrame(
         [{k: v for k, v in r.items() if not k.startswith("fold_")} for r in registros_cv]
     )
@@ -1236,24 +1506,17 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
     salvar_tabela(df_tuning, "2_espaco_busca_e_melhores_parametros", index=False)
 
     # ----------------------------------------------------------------------- #
-    # 6. Avaliação preliminar no conjunto de Teste (ponte p/ Acompanhamento e Tópico 5)
+    # 6. Avaliação no conjunto de Teste (19.020 pedidos)
     # ----------------------------------------------------------------------- #
-    print("6. Calculando resultados preliminares no conjunto de teste (19.020 pedidos)...")
+    print("6. Calculando resultados no conjunto de teste (19.020 pedidos)...")
     linhas_teste = []
-    predicoes_df = pd.DataFrame({"y_true": y_te, "pred_prazo_olist": prazo_te.to_numpy()})
+    p_te_arr = prazo_te.fillna(prazo_tr.median()).to_numpy()
+    predicoes_df = pd.DataFrame({"y_true": y_te, "pred_prazo_olist": p_te_arr})
 
-    # Baseline 1: Prazo Olist
     linhas_teste.append(
-        metricas_teste(
-            "Prazo Estimado Olist",
-            "Baseline (Negócio)",
-            "Baseline",
-            y_te,
-            prazo_te.to_numpy(),
-        )
+        metricas_teste("Prazo Estimado Olist", "Baseline (Negócio)", "Baseline", y_te, p_te_arr)
     )
 
-    # Baseline 2: Dummy Mediana
     dummy_est = DummyRegressor(strategy="median").fit(X_tr, y_tr)
     pred_dummy = dummy_est.predict(X_te)
     predicoes_df["pred_dummy_mediana"] = pred_dummy
@@ -1261,7 +1524,6 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
         metricas_teste("Dummy (Mediana)", "Baseline (Estatístico)", "Baseline", y_te, pred_dummy)
     )
 
-    # 4 Modelos Tuned no Teste + salvamento com joblib
     arquivos_modelos = {
         "Ridge": "ridge_tuned.joblib",
         "Decision Tree": "decision_tree_tuned.joblib",
@@ -1282,7 +1544,7 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
     print("   Predições no teste salvas em data/processed/predicoes_teste.csv")
 
     # ----------------------------------------------------------------------- #
-    # 7. Geração das figuras para os slides
+    # 7. Geração das figuras e diagnóstico segmentado de erros
     # ----------------------------------------------------------------------- #
     print("7. Gerando figuras em docs/figures/04_treinamento/...")
     plot_1_default_vs_tuned(df_cv)
@@ -1294,10 +1556,11 @@ def main(proc_dir: Path = PROCESSED_DIR, seed: int = 42) -> None:
     salvar_tabela(df_imp, "5_importancia_features", index=False)
     plot_7_real_vs_previsto(predicoes_df)
     plot_8_erros_e_tolerancia(predicoes_df)
+    plot_9_onde_modelo_erra_mais(df_te_raw, predicoes_df)
 
     print("\nResumo final (Validação Cruzada 5-Fold):")
     print(df_cv[["modelo", "familia", "estagio", "train_rmse_mean", "cv_rmse_mean", "cv_mae_mean", "cv_r2_mean"]].to_string(index=False))
-    print("\nResumo preliminar (Conjunto de Teste):")
+    print("\nResumo final (Conjunto de Teste):")
     print(df_teste.to_string(index=False))
     print(f"\nConcluído! Figuras e tabelas em {OUT_DIR}")
 

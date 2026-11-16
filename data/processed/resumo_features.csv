@@ -9,8 +9,7 @@ razao_frete_preco,numérica (log1p + StandardScaler),frete_total / preco_total,0
 n_itens,numérica (RobustScaler),Quantidade de itens no pedido,0.0
 n_produtos,numérica (RobustScaler),Quantidade de produtos distintos,0.0
 n_vendedores,numérica (RobustScaler),Quantidade de vendedores distintos,0.0
-prazo_estimado_dias,numérica (RobustScaler),"Prazo prometido no checkout (estimada − compra), em dias",0.0
-prazo_postagem_dias,numérica (RobustScaler),"Prazo limite de postagem do vendedor (shipping_limit − compra), em dias",0.0
+prazo_postagem_dias,numérica (RobustScaler),"Prazo limite de postagem do vendedor (shipping_limit − compra), em dias",0.16
 parcelas_max,numérica (RobustScaler),Maior número de parcelas do pagamento,0.0
 compra_hora,numérica (RobustScaler),Hora da compra (0–23),0.0
 cliente_lat,numérica (RobustScaler),Latitude do cliente (mediana do prefixo de CEP),0.27

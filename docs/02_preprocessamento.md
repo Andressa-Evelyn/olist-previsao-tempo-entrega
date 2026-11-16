@@ -39,6 +39,7 @@ compra**.
 |---|---|
 | `order_approved_at`, `order_delivered_carrier_date` | Acontecem **depois** da compra, já dentro do processo de entrega (vazamento) |
 | `order_delivered_customer_date` | É o próprio alvo |
+| `order_estimated_delivery_date` (`prazo_estimado_dias`) | É a **estimativa atual da própria Olist** que queremos substituir (usada apenas na EDA e como **Baseline de comparação** nos Tópicos 4 e 5) |
 | Reviews (nota/comentário) | Ocorrem após a entrega (já definido no Tópico 1; só na EDA) |
 
 **Features criadas** (agregações em nível de pedido):
@@ -47,8 +48,7 @@ compra**.
 - **Geografia:** coordenadas do cliente e do vendedor (mediana por prefixo de CEP)
   e `distancia_media_km` / `distancia_max_km` (**haversine** vendedor→cliente);
   `mesmo_estado`.
-- **Tempo:** `prazo_estimado_dias` (estimada − compra, prometido no checkout),
-  `prazo_postagem_dias` (limite de postagem − compra), `compra_dia_semana`,
+- **Tempo:** `prazo_postagem_dias` (limite de postagem − compra), `compra_dia_semana`,
   `compra_mes`, `compra_hora`, `compra_fim_semana`.
 - **Produto/pagamento:** `categoria_produto` (do item de maior valor, traduzida
   para inglês), `tipo_pagamento` predominante, `parcelas_max`.
@@ -63,9 +63,9 @@ compra**.
 | Pedidos não entregues / sem data de entrega | Removidos (sem alvo) |
 | Pedidos duplicados | Removidos |
 | Coordenadas fora do território brasileiro (lat/lng inválidas) | Descartadas antes de calcular a mediana por CEP |
-| Peso, volume e preço ≤ 0 | Viram **ausente** (valor fisicamente impossível) |
+| Peso, volume, preço e parcelas ≤ 0 | Viram **ausente** (valor fisicamente impossível / inválido) |
 | Alvo ≤ 0 (entrega antes da compra) | Linha removida |
-| Prazo estimado ≤ 0 | Vira ausente |
+| Prazo de postagem ≤ 0 ou > 30 dias (erros de cadastro de até 1.052 dias) | Vira **ausente** (187 pedidos na base bruta, imputados depois pela mediana do treino) |
 | **Outliers extremos do alvo** (> Q3 + 3·IQR) | Linha removida — **1.370 pedidos (≈1,4%)**, limite de **42,58 dias** |
 
 > O corte do outlier usa 3·IQR (extremo), e não o 1,5·IQR clássico, para não
@@ -113,7 +113,7 @@ como serão comparados no Tópico 4, o mesmo conjunto serve para todos.
 
 ## Resumo das features selecionadas
 
-27 features de entrada → **65 colunas** após a codificação (treino: 76.080 linhas;
+26 features de entrada → **64 colunas** após a codificação (treino: 76.080 linhas;
 teste: 19.020 linhas; 0 valores faltantes restantes). A coluna **Tratamento** indica
 o que é aplicado a cada feature depois de criada.
 
@@ -148,8 +148,9 @@ o que é aplicado a cada feature depois de criada.
 
 | Feature | O que representa | Origem | Tratamento |
 |---|---|---|---|
-| `prazo_estimado_dias` | Prazo prometido no checkout (estimada − compra) | orders | mediana + RobustScaler |
 | `prazo_postagem_dias` | Prazo limite para o vendedor postar (shipping_limit − compra) | items | mediana + RobustScaler |
+
+*(Nota: `prazo_estimado_dias` é mantido apenas em `olist_dataset.csv` para a EDA e como Baseline de comparação nos Tópicos 4 e 5, não entrando como feature dos modelos).*
 
 ### Data da compra
 
@@ -172,15 +173,16 @@ o que é aplicado a cada feature depois de criada.
 | Tratamento | Qtde |
 |---|---|
 | log1p + StandardScaler | 7 |
-| RobustScaler | 11 |
+| RobustScaler | 10 |
 | Binárias, sem escala | 3 |
 | One-Hot | 5 |
 | TargetEncoder | 1 |
-| **Total** | **27** |
+| **Total** | **26** |
 
 ### O que ficou de fora
 
 - **Alvo:** `tempo_entrega_dias`, a variável prevista.
+- **Estimativa da própria Olist:** `prazo_estimado_dias` (usada apenas na EDA e como Baseline de negócio nos Tópicos 4 e 5, pois o modelo deve prever o tempo de entrega de forma independente da estimativa antiga da Olist).
 - **Identificadores:** `order_id` e `data_compra` (só rastreio, não entram no modelo).
 - **Informações posteriores à compra** (risco de vazamento): `order_approved_at`,
   data de postagem à transportadora e reviews.

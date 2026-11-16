@@ -1,0 +1,7 @@
+faixa_real,pedidos,tempo_real_medio,tempo_prev_medio,mae_dias,vies_dias
+Até 5d (muito rápida),2591,3.39,6.56,3.2,3.17
+5–10d (rápida),6641,7.49,10.19,3.21,2.69
+10–15d (média),4834,12.28,13.04,2.83,0.76
+15–20d (moderada),2367,17.22,15.13,3.71,-2.09
+20–30d (lenta),1956,23.81,16.69,7.25,-7.11
+30–43d (muito lenta),631,34.72,17.92,16.8,-16.8

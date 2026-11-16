@@ -48,7 +48,7 @@ from preprocessing import (
 
 OUT_DIR = ROOT / "docs" / "figures" / "03_eda"
 
-NUMERICAS = list(NUM_LOG) + list(NUM_ROBUST)
+NUMERICAS = list(NUM_LOG) + ["prazo_estimado_dias"] + list(NUM_ROBUST)
 COORDS = ["cliente_lat", "cliente_lng", "vendedor_lat", "vendedor_lng"]
 
 # --------------------------------------------------------------------------- #

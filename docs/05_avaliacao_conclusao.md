@@ -1,12 +1,12 @@
 # 5. Avaliação do Modelo e Conclusão
 
-Esta etapa avalia a capacidade dos modelos de prever o tempo de entrega dos pedidos da Olist, compara seus desempenhos em dados não utilizados durante o treinamento e justifica a escolha do modelo final. A avaliação utiliza os resultados registrados em `docs/figures/04_treinamento/tabelas/4_resultados_parciais_teste.csv`.
+Esta etapa avalia a capacidade dos modelos de prever o tempo de entrega dos pedidos da Olist, compara seus desempenhos em dados não utilizados durante o treinamento, investiga em quais regiões/estados o modelo erra mais e justifica a escolha do modelo final. A avaliação utiliza os resultados registrados em [`docs/figures/04_treinamento/tabelas/4_resultados_parciais_teste.csv`](figures/04_treinamento/tabelas/4_resultados_parciais_teste.csv).
 
 ### 5.1. Protocolo de avaliação
 
-A avaliação final foi realizada sobre o conjunto de teste, composto por **19.020 pedidos (20% da base)**. Esses registros foram separados antes do treinamento e não participaram do ajuste dos hiperparâmetros. Os modelos avaliados são as versões otimizadas de Ridge, Decision Tree, KNN e Random Forest. Também foram incluídos dois baselines: a mediana do tempo de entrega observada no conjunto de treino e o prazo estimado informado pela Olist.
+A avaliação final foi realizada sobre o conjunto de teste, composto por **19.020 pedidos (20% da base)**. Esses registros foram separados antes do treinamento e não participaram do ajuste dos hiperparâmetros. Os modelos avaliados são as versões otimizadas de **Ridge**, **Decision Tree**, **KNN** e **Random Forest** — todos treinados **sem utilizar o `prazo_estimado_dias` da Olist como feature de entrada**, garantindo independência em relação à estimativa atual da empresa. Também foram incluídos dois baselines: a mediana do tempo de entrega observada no conjunto de treino (**10,1 dias**) e o prazo estimado informado pela Olist.
 
-A seleção e o ajuste dos modelos foram conduzidos anteriormente por validação cruzada de cinco folds, restrita ao conjunto de treino. Assim, o conjunto de teste funciona como uma avaliação final em dados não vistos, permitindo comparar as alternativas sem utilizá-lo na escolha dos hiperparâmetros.
+A seleção e o ajuste dos modelos foram conduzidos anteriormente por validação cruzada de cinco folds, restrita ao conjunto de treino, com controle explícito de *overfitting* (nenhum modelo otimizado apresenta memorização ou `RMSE = 0` no treino).
 
 ### 5.2. Métricas utilizadas
 
@@ -14,77 +14,80 @@ Foram utilizadas três métricas principais de regressão:
 
 - **MAE:** calcula a média dos valores absolutos das diferenças entre o tempo real e o previsto. É expresso em dias e representa o tamanho médio do erro, sem considerar sua direção. Quanto menor, melhor.
 - **RMSE:** calcula a raiz da média dos erros ao quadrado. Também é expresso em dias, mas penaliza mais fortemente erros de grande magnitude. Quanto menor, melhor.
-- **R²:** indica quanto da variabilidade do tempo real de entrega é explicada pelas previsões do modelo. Quanto mais próximo de 1, melhor. Um valor negativo indica desempenho inferior ao de um preditor constante baseado na média do alvo, considerando a definição usual dessa métrica.
+- **R²:** indica quanto da variabilidade do tempo real de entrega é explicada pelas previsões do modelo ($R^2 = 1 - \frac{\text{MSE}_{\text{modelo}}}{\text{Var}(y)}$). Quanto mais próximo de 1, melhor. Um valor negativo indica que o erro quadrático médio do método é superior à variância natural dos dados (isto é, erra mais do que um preditor constante baseado na média do alvo).
 
 Como métricas complementares, também foram registrados o **MedAE** (erro absoluto mediano), o viés médio das previsões e o percentual de pedidos em que a previsão ficou a até três ou cinco dias do valor real.
 
 ### 5.3. Benchmark dos modelos no conjunto de teste
 
-A tabela apresenta os resultados dos seis métodos avaliados. Os valores de erro estão em dias. Para MAE e RMSE, quanto menor, melhor o desempenho.
+A tabela apresenta os resultados dos seis métodos avaliados nos 19.020 pedidos de teste:
 
-| Modelo                      | MAE (dias) | RMSE (dias) |        R² | Erro mediano (dias) | Erro até 5 dias |
-| --------------------------- | ---------: | ----------: | --------: | ------------------: | --------------: |
-| **Random Forest otimizado** |   **4,00** |    **5,54** | **0,440** |            **3,00** |      **73,08%** |
-| KNN otimizado               |       4,18 |        5,78 |     0,391 |                3,15 |          71,38% |
-| Decision Tree otimizada     |       4,18 |        5,79 |     0,388 |                3,10 |          70,39% |
-| Ridge otimizado             |       4,26 |        6,24 |     0,290 |                3,27 |          69,51% |
-| Dummy (mediana)             |       5,49 |        7,63 |    -0,060 |                4,01 |          60,02% |
-| Prazo estimado da Olist     |      12,57 |       14,63 |    -2,906 |               12,17 |          13,01% |
+| Modelo                      | MAE (dias) | RMSE (dias) |        R² | Erro mediano (dias) | Erro até 3 dias | Erro até 5 dias |
+| --------------------------- | ---------: | ----------: | --------: | ------------------: | --------------: | --------------: |
+| **Random Forest otimizado** |   **4,04** |    **5,60** | **0,427** |            **3,02** |      **49,63%** |      **72,58%** |
+| Decision Tree otimizada     |       4,21 |        5,82 |     0,383 |                3,14 |          48,00% |          70,29% |
+| Ridge otimizado             |       4,26 |        5,82 |     0,382 |                3,29 |          46,16% |          69,34% |
+| KNN otimizado               |       4,23 |        5,85 |     0,377 |                3,20 |          47,32% |          70,75% |
+| Dummy (mediana)             |       5,49 |        7,63 |    -0,060 |                4,01 |          37,81% |          60,02% |
+| Prazo estimado da Olist     |      12,57 |       14,63 |    -2,906 |               12,17 |           7,67% |          13,01% |
 
-O **Random Forest otimizado apresentou o melhor desempenho geral**: obteve o menor MAE e RMSE e o maior R² entre todos os métodos avaliados. Seu erro absoluto mediano foi de três dias, e 73,08% dos pedidos tiveram erro absoluto de até cinco dias. Além disso, 50,02% das previsões ficaram a até três dias do tempo real.
+O **Random Forest otimizado apresentou o melhor desempenho geral**: obteve o menor MAE (**4,04 dias**), o menor RMSE (**5,60 dias**) e o maior R² (**0,427**) entre todos os métodos avaliados, mesmo sem utilizar a estimativa da Olist como variável de entrada. Seu erro absoluto mediano foi de **3,02 dias**, com **49,63%** das previsões a até três dias do valor real e **72,58%** a até cinco dias.
 
-Os resultados também mostram que todos os quatro modelos de aprendizado de máquina superaram os dois baselines no conjunto de teste. O Dummy, que prevê sempre a mediana do tempo de entrega do treino, apresentou MAE de 5,49 dias. Já o prazo estimado da Olist apresentou MAE de 12,57 dias e R² negativo (-2,906), indicando desempenho bastante inferior ao dos modelos treinados para este conjunto de dados.
+#### Por que o `Prazo estimado da Olist` apresenta $R^2 = -2,906$?
+Pela fórmula $R^2 = 1 - \frac{\text{MSE}_{\text{modelo}}}{\text{Var}(y_{\text{real}})}$, um modelo que prevê sempre a média real do teste (~11,9 dias) possui erro quadrático médio igual à variância do alvo ($\sigma_y^2 \approx 54,8\text{ dias}^2$) e, portanto, $R^2 = 0$. Já o prazo estimado da Olist não busca prever o tempo médio real: trata-se de um prazo conservador que embute uma **folga média de +11,81 dias** acima do tempo real para evitar atrasos percebidos pelo consumidor. Essa superestimação sistemática gera um $\text{RMSE} = 14,63\text{ dias}$ ($\text{MSE} = 14,63^2 \approx 214,2\text{ dias}^2$, quase 4 vezes maior que a variância do alvo), resultando em $R^2 = 1 - \frac{214,2}{54,8} = \mathbf{-2,906}$.
 
 ### 5.4. Justificativa da escolha do modelo final
 
-O **Random Forest otimizado foi selecionado como modelo final** por apresentar a melhor combinação das métricas consideradas. Em relação ao segundo colocado, o KNN, reduziu o MAE de 4,18 para 4,00 dias e o RMSE de 5,78 para 5,54 dias, além de apresentar R² superior (0,440 contra 0,391).
+O **Random Forest otimizado foi selecionado como modelo final** por apresentar a melhor combinação em todas as métricas avaliadas. Em relação aos modelos de árvore única (Decision Tree), linear (Ridge) e baseado em vizinhos (KNN), reduziu o MAE de ~4,21–4,26 para **4,04 dias** e o RMSE de ~5,82–5,85 para **5,60 dias**, elevando o $R^2$ de ~0,38 para **0,427**.
 
-A escolha também é sustentada pela validação cruzada de cinco folds realizada no conjunto de treino. Nessa etapa, o Random Forest otimizado obteve RMSE médio de **5,6001 ± 0,0564 dias**, MAE médio de **4,02 dias** e R² médio de **0,4393**. No conjunto de teste, os resultados foram RMSE de **5,5425 dias**, MAE de **3,9968 dias** e R² de **0,4398**. A proximidade entre os resultados da validação cruzada e do teste é um indicativo de desempenho consistente nessa avaliação, sem evidência de uma queda relevante de generalização entre essas duas etapas.
+A escolha também é sustentada pela validação cruzada de cinco folds realizada no conjunto de treino. Nessa etapa, o Random Forest otimizado obteve RMSE médio de **5,6525 ± 0,0580 dias**, MAE médio de **4,0624 dias** e R² médio de **0,4288**. No conjunto de teste, os resultados foram RMSE de **5,6041 dias**, MAE de **4,0401 dias** e R² de **0,4273**. A proximidade entre validação cruzada e teste confirma a consistência de generalização do modelo.
 
-Outro ponto favorável é a comparação com o prazo estimado da Olist. O MAE caiu de 12,5681 para 3,9968 dias, uma redução aproximada de **68,2%**. Essa comparação indica que, nos pedidos avaliados, o modelo desenvolvido produziu estimativas consideravelmente mais próximas dos tempos reais de entrega do que o prazo de referência disponível na base.
+Além disso, após o tratamento no pré-processamento dos erros de cadastro em `prazo_postagem_dias` (> 30 dias, que chegavam a 1.052 dias), o modelo linear **Ridge** também passou a apresentar comportamento estável no teste (RMSE de **5,82 dias**, alinhado aos **5,87 dias** da validação cruzada).
 
-### 5.5. Análise dos resultados e limitações
+Em comparação com o prazo estimado da Olist, o Random Forest reduziu o MAE de **12,57 para 4,04 dias** — uma redução de **67,9% no erro absoluto médio**.
 
-Apesar do melhor desempenho relativo, o R² de **0,440** indica que o Random Forest explica aproximadamente 44% da variabilidade observada nos tempos de entrega. Portanto, ainda existe uma parcela expressiva da variação que não é explicada pelas variáveis utilizadas. O MAE de aproximadamente quatro dias também mostra que as previsões não devem ser interpretadas como datas garantidas de entrega.
+### 5.5. Análise dos resultados, comportamento em ~10 dias e diagnóstico de onde o modelo erra mais
 
-A diferença entre RMSE (5,54 dias) e MAE (4,00 dias) indica que erros de maior magnitude influenciam o resultado e merecem investigação. A distribuição dos erros e os percentuais de tolerância complementam a média: embora 73,08% dos pedidos tenham erro de até cinco dias, os demais pedidos ainda podem apresentar desvios relevantes.
+![Tempo Real vs Previsto no Teste](figures/04_treinamento/7_real_vs_previsto_teste.png)
 
-Também foi identificada uma anomalia no conjunto de teste que afeta especialmente o Ridge: um pedido apresenta `prazo_postagem_dias` igual a 1.052 dias. Nesse registro, o Ridge produziu uma previsão de aproximadamente 331,9 dias, elevando seu RMSE para 6,24 dias. Esse caso evidencia a sensibilidade de modelos lineares a valores extremos. Os modelos baseados em árvores e vizinhos não apresentaram o mesmo impacto nesse registro.
+![Diagnóstico de onde o modelo erra mais](figures/04_treinamento/9_onde_modelo_erra_mais.png)
 
-Os resultados devem ser interpretados considerando que a avaliação foi feita por uma divisão aleatória de treino e teste. Essa estratégia mede o desempenho em pedidos separados da mesma base histórica, mas não reproduz integralmente um cenário de implantação em que o modelo precisa prever pedidos de períodos futuros, sujeitos a mudanças operacionais e sazonais.
+1. **Concentração no ponto médio (~10,2 dias) e achatamento em entregas muito longas:**
+   - No gráfico *Real × Previsto*, a maior densidade de pontos concentra-se em torno de **10,2 dias** (mediana real das entregas), pois ~83% dos pedidos ocorrem no Sudeste e Sul, onde os prazos reais variam majoritariamente entre 5 e 15 dias. Nessa faixa central (74% dos pedidos do teste), a mediana prevista acompanha de perto a diagonal ideal e o MAE do modelo é baixo (**2,83 a 3,21 dias**).
+   - Para entregas reais acima de **20 dias** (especialmente na faixa de 30 a 43 dias, que representa 3,3% do teste), a curva prevista estabiliza em torno de **16 a 22 dias** (MAE de **7,25 d** na faixa 20–30d e **16,80 d** na faixa 30–43d). Isso ocorre porque atrasos extremos costumam decorrer de fatores pós-compra não observáveis no momento do pedido (extravios temporários, greves, retenção fiscal ou falhas operacionais na transportadora).
+
+2. **Estados (UFs) e Regiões onde o modelo erra mais ([`6_erro_por_uf.csv`](figures/04_treinamento/tabelas/6_erro_por_uf.csv) e [`7_erro_por_regiao.csv`](figures/04_treinamento/tabelas/7_erro_por_regiao.csv)):**
+   - **Sudeste (MAE = 3,69 d | 77,5% até ±5d):** menor erro do país, puxado por **SP (MAE = 3,18 d**, onde 83,5% dos pedidos têm erro ≤ 5 dias) e **MG (3,86 d)**. A exceção dentro do Sudeste é o **RJ (MAE = 5,05 d)**, que apresenta alta variabilidade logística mesmo próximo a SP.
+   - **Sul (MAE = 4,40 d) e Centro-Oeste (MAE = 4,47 d):** desempenho intermediário (**PR = 4,02 d**, **GO = 4,32 d**, **DF = 4,44 d**, **SC = 4,45 d**, **RS = 4,71 d**).
+   - **Nordeste (MAE = 5,49 d) e Norte (MAE = 5,67 d):** regiões onde o modelo mais erra, com destaque para **AL (6,83 d)**, **AM (6,59 d)**, **PB (6,20 d)**, **PE (5,75 d)**, **TO (5,75 d)** e **PA (5,74 d)**, devido às longas distâncias em relação aos vendedores (concentrados no Sudeste/Sul), menor volume amostral e maior incerteza nos modais de transporte.
 
 ### 5.6. Possíveis melhorias e trabalhos futuros
 
-Com base nas métricas e nas limitações observadas, são propostas as seguintes evoluções:
+Com base nas métricas e no diagnóstico por segmento, são propostas as seguintes evoluções:
 
-1. **Aprimorar a qualidade dos dados:** investigar e tratar registros extremos ou inconsistentes, como o prazo de postagem de 1.052 dias identificado na avaliação. O tratamento deve ser orientado por regras de negócio e não apenas pela remoção automática de valores altos, pois alguns atrasos podem ser reais.
-2. **Adicionar variáveis logísticas e contextuais:** avaliar a inclusão de informações sobre transportadoras, modalidade de envio, feriados, condições climáticas e características das rotas, desde que estejam disponíveis no momento em que a previsão for realizada. Isso pode ajudar a explicar parte da variabilidade ainda não capturada pelo modelo.
-3. **Investigar o desempenho por segmentos:** calcular métricas separadas por estado, região, vendedor, distância e faixa de tempo de entrega. A avaliação agregada pode esconder grupos nos quais o modelo apresenta erros significativamente maiores.
-4. **Testar outros algoritmos de ensemble:** comparar o Random Forest com métodos de Gradient Boosting, como XGBoost, LightGBM ou HistGradientBoosting, mantendo o mesmo protocolo de validação e teste.
-5. **Ampliar a busca de hiperparâmetros:** explorar espaços de busca adicionais e avaliar se os ganhos justificam o custo computacional. A comparação deve continuar sendo feita por validação cruzada, preservando o conjunto de teste para a avaliação final.
-6. **Realizar validação temporal:** em uma evolução do projeto, treinar com pedidos de períodos anteriores e testar em períodos posteriores. Essa estratégia aproxima a avaliação das condições reais de implantação e permite observar efeitos de sazonalidade e mudanças na operação.
-7. **Estimar incerteza das previsões:** investigar intervalos de previsão ou estimativas por quantis, para que a aplicação possa apresentar uma faixa provável de entrega em vez de comunicar apenas um valor pontual.
+1. **Adicionar variáveis logísticas e contextuais externas:** incluir dados sobre modalidade de frete (PAC vs. Sedex vs. transportadora privada), feriados regionais, condições climáticas e indicadores de risco de rota/CEP (especialmente para mitigar a variância observada no RJ e nas rotas para Norte/Nordeste).
+2. **Modelos especializados por região ou faixa de distância:** treinar modelos específicos (ou aplicar pesos amostrais) para rotas interestaduais de longa distância (> 1.200 km), onde o erro médio supera 5 dias.
+3. **Testar algoritmos de Gradient Boosting e regressão quantílica:** comparar o Random Forest com LightGBM / XGBoost / HistGradientBoosting e estimar intervalos de confiança (ex.: percentil 50 para previsão central e percentil 85–90 para promessa segura de SLA no checkout).
+4. **Validação temporal (*Time-based Split*):** avaliar o treinamento em janelas passadas para prever meses futuros, capturando mudanças estruturais na malha logística da Olist ao longo do tempo.
 
 ### 5.7. Conclusão
 
-Com base nos experimentos realizados, conclui-se que o **Random Forest otimizado é o modelo mais adequado entre as alternativas avaliadas para prever o tempo de entrega dos pedidos da Olist**. Ele apresentou MAE de aproximadamente quatro dias, RMSE de 5,54 dias e R² de 0,440 no conjunto de teste, superando Ridge, Decision Tree, KNN e os dois baselines utilizados na comparação.
+Com base nos experimentos realizados, conclui-se que o **Random Forest otimizado é o modelo mais adequado entre as alternativas avaliadas para prever o tempo de entrega dos pedidos da Olist**. Treinado apenas com características físicas, geográficas e temporais do pedido (sem depender da estimativa prévia da Olist), ele alcançou **MAE de 4,04 dias**, **RMSE de 5,60 dias**, **erro mediano de 3,02 dias** e **R² de 0,427** no conjunto de teste, superando Decision Tree, Ridge, KNN e os dois baselines.
 
-O resultado mais expressivo foi a redução de aproximadamente 68,2% no erro absoluto médio em relação ao prazo estimado da Olist presente na base. Além disso, cerca de 73% dos pedidos tiveram previsões com erro de até cinco dias. Esses resultados indicam que o modelo aprendeu relações úteis entre as características dos pedidos e seus tempos de entrega.
-
-Assim, o modelo atende ao objetivo do projeto como **ferramenta de apoio à estimativa logística**, podendo auxiliar no planejamento e na comunicação de prazos mais próximos dos tempos observados. Entretanto, o desempenho ainda não permite tratar a previsão como garantia de entrega: o R² demonstra capacidade explicativa moderada e os erros podem ser relevantes em determinados pedidos ou segmentos. Antes de uma utilização operacional, é recomendado validar o modelo em períodos futuros, monitorar seus erros e incorporar novas informações logísticas. Portanto, a solução é promissora como apoio à decisão, mas ainda requer validação e evolução para uma implantação em produção.
+O resultado mais expressivo é a **redução de 67,9% no erro absoluto médio** em relação ao prazo estimado da Olist presente na base (de 12,57 para 4,04 dias), além de elevar a taxa de previsões dentro de ±5 dias de **13,01% para 72,58%**. Assim, o modelo atende de forma robusta ao objetivo do projeto como ferramenta de estimativa logística, oferecendo previsões centradas na realidade operacional e permitindo identificar claramente os segmentos regionais que demandam maior atenção logística.
 
 ### 5.8. Rastreabilidade dos resultados
 
 Os resultados apresentados podem ser conferidos e reproduzidos por:
 
-- `src/train.py`: cálculo das métricas (`metricas_teste`), avaliação dos baselines e modelos no conjunto de teste e geração dos resultados.
-- `docs/figures/04_treinamento/tabelas/4_resultados_parciais_teste.csv`: métricas finais dos seis métodos avaliados.
-- `docs/figures/04_treinamento/tabelas/1_baselines_e_modelos_cv.csv`: resultados da validação cruzada de cinco folds.
-- `data/processed/predicoes_teste.csv`: valores reais e previsões individuais usados na análise dos erros, gerado durante a execução do treinamento.
-- `docs/04_treinamento.md`: documentação do treinamento, dos hiperparâmetros e dos resultados intermediários.
+- [`src/preprocessing.py`](../src/preprocessing.py): construção das 26 features (sem `prazo_estimado_dias`), limpeza de anomalias (`prazo_postagem_dias > 30`) e geração dos conjuntos de treino e teste.
+- [`src/train.py`](../src/train.py): validação cruzada 5-fold, ajuste de hiperparâmetros, avaliação no teste e diagnóstico segmentado por UF, região, prazo e distância.
+- [`docs/figures/04_treinamento/tabelas/4_resultados_parciais_teste.csv`](figures/04_treinamento/tabelas/4_resultados_parciais_teste.csv): métricas finais dos seis métodos avaliados no teste.
+- [`docs/figures/04_treinamento/tabelas/6_erro_por_uf.csv`](figures/04_treinamento/tabelas/6_erro_por_uf.csv), [`7_erro_por_regiao.csv`](figures/04_treinamento/tabelas/7_erro_por_regiao.csv) e [`8_erro_por_faixa_real.csv`](figures/04_treinamento/tabelas/8_erro_por_faixa_real.csv): tabelas do diagnóstico de onde o modelo erra mais.
 
-Para regenerar as métricas, figuras e tabelas, com os dados processados disponíveis, execute:
+Para regenerar todos os dados, métricas, figuras e tabelas, execute:
 
 ```bash
+python src/preprocessing.py
 python src/train.py
 ```

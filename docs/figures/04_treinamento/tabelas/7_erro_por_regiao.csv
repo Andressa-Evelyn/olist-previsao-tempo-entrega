@@ -1,0 +1,6 @@
+regiao,pedidos,tempo_real_medio,tempo_prev_medio,mae_dias,rmse_dias,vies_dias,pct_ate_5d
+Sudeste,13043,10.29,10.27,3.69,5.25,-0.02,77.51
+Sul,2743,13.62,13.71,4.4,5.91,0.09,66.97
+Centro-Oeste,1116,14.37,14.76,4.47,5.78,0.39,65.41
+Nordeste,1756,18.21,18.26,5.49,7.03,0.05,53.3
+Norte,362,20.72,20.24,5.67,7.18,-0.48,53.31
